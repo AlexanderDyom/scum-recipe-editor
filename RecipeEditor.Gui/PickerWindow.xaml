@@ -1,0 +1,71 @@
+<Window x:Class="RecipeEditor.Gui.PickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:RecipeEditor.Gui"
+        Style="{StaticResource AppWindow}" Title="SCUM Recipe Editor"
+        Width="700" Height="600" MinWidth="560" MinHeight="420" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Margin="18,16,18,10">
+      <TextBlock x:Name="Heading" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,10" TextTrimming="CharacterEllipsis"/>
+      <TextBox x:Name="SearchBox" Style="{StaticResource SearchField}" Tag="{l:T PickerSearch}" TextChanged="SearchBox_TextChanged"/>
+      <WrapPanel x:Name="Chips" Margin="0,10,0,0"/>
+    </StackPanel>
+    <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="18,12">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <Button Style="{StaticResource Btn}" Content="{l:T Cancel}" IsCancel="True" Margin="0,0,8,0"/>
+          <Button x:Name="OkButton" Style="{StaticResource Primary}" IsDefault="True" IsEnabled="False" Click="Ok_Click"/>
+        </StackPanel>
+        <TextBlock x:Name="Info" Style="{StaticResource Small}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+      </DockPanel>
+    </Border>
+    <Grid>
+      <!-- rows of cells: only the visible rows are made (food and every other item: a few thousand) -->
+      <ItemsControl x:Name="Rows" Padding="14,0,6,0" SizeChanged="Rows_SizeChanged"
+                    VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
+        <ItemsControl.Template>
+          <ControlTemplate TargetType="ItemsControl">
+            <ScrollViewer CanContentScroll="True" Padding="{TemplateBinding Padding}" Focusable="False" VerticalScrollBarVisibility="Auto">
+              <ItemsPresenter/>
+            </ScrollViewer>
+          </ControlTemplate>
+        </ItemsControl.Template>
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <ItemsControl ItemsSource="{Binding}" Focusable="False">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type l:PickerItem}">
+                  <Button Style="{StaticResource Bare}" Click="Cell_Click" MouseDoubleClick="Cell_DoubleClick" Margin="0,0,8,8"
+                          AutomationProperties.Name="{Binding AutoName}" ToolTip="{Binding Tip}">
+                    <Border x:Name="b" Width="100" Height="104" Background="{StaticResource Surface}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="6,8,6,6">
+                      <StackPanel>
+                        <l:IconView Width="44" Height="44" Texture="{Binding Icon}" Fallback="{Binding Initial}"/>
+                        <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{StaticResource Text}" TextAlignment="Center" TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis" Height="28" Margin="0,5,0,0" LineHeight="14"/>
+                        <TextBlock Text="{Binding ClassName}" FontSize="10" Foreground="{StaticResource Muted}" TextAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      </StackPanel>
+                    </Border>
+                  </Button>
+                  <DataTemplate.Triggers>
+                    <Trigger SourceName="b" Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{StaticResource Surface2}"/></Trigger>
+                    <DataTrigger Binding="{Binding Selected}" Value="True">
+                      <Setter TargetName="b" Property="Background" Value="{StaticResource AccentBg}"/>
+                      <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                    </DataTrigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock x:Name="Message" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+    </Grid>
+  </DockPanel>
+</Window>

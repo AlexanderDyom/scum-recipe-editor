@@ -1,0 +1,3 @@
+[submodule "modkit"]
+	path = modkit
+	url = https://github.com/AlexanderDyom/scum-modkit

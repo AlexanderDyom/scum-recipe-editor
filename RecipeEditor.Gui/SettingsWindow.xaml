@@ -1,0 +1,53 @@
+<Window x:Class="RecipeEditor.Gui.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:RecipeEditor.Gui"
+        Style="{StaticResource AppWindow}" Title="SCUM Recipe Editor"
+        Width="980" Height="700" MinWidth="820" MinHeight="560" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Window.Resources>
+    <!-- section list on the left -->
+    <Style TargetType="RadioButton" x:Key="Nav">
+      <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="b" CornerRadius="6" Padding="10,8" Background="Transparent">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{StaticResource Surface2}"/></Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="b" Property="Background" Value="{StaticResource AccentBg}"/>
+                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+  <DockPanel>
+    <l:GlobalStatus DockPanel.Dock="Bottom"/>
+    <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button Style="{StaticResource Btn}" Content="{l:T Cancel}" IsCancel="True" Margin="0,0,8,0"/>
+        <Button x:Name="SaveButton" Style="{StaticResource Primary}" Content="{l:T Save}" IsDefault="True" Click="Save_Click"/>
+      </StackPanel>
+    </Border>
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="210"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0" Padding="8,12">
+        <StackPanel x:Name="Nav"/>
+      </Border>
+      <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="Pane" Margin="24,18,24,24"/>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>
