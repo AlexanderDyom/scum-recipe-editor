@@ -332,6 +332,7 @@ public sealed class GameData
         string? icon = null, caption = null, description = null;
         double? weight = null;
         int? uses = null;
+        string? holds = null;
         var esPackage = package.StartsWith("/Game/", StringComparison.OrdinalIgnoreCase) ? "SCUM/Content/" + package[6..] + "_ES" : null;
         // an _ES that is a child of another (Mutant_Buck_Steak_ES of a steak) keeps only what differs: the rest is the parent's
         for (var depth = 0; esPackage != null && depth < 4; depth++)
@@ -342,12 +343,15 @@ public sealed class GameData
             description ??= es?["Description"] is { } d ? loc.Text(d) : null;
             weight ??= (double?)Get(es, "Weight");
             uses ??= exports.Select(e => (int?)Get(e["Properties"], "MaxQuantity")).FirstOrDefault(q => q != null);
+            // a container (bottle, canteen): the liquid it comes with (GameResourceContainerEntityComponentSetup)
+            holds ??= exports.Select(e => Get(e["Properties"], "DefaultResourceType")).Where(r => r != null)
+                .Select(r => ResourcePath(Get(r, "ObjectName"), Get(r, "ObjectPath"))).FirstOrDefault(r => r != null);
             icon ??= (string?)Get(Get(es, "GeneralPurposeIcon"), "AssetPathName") ?? (string?)Get(Get(es, "GridInventoryIcon"), "AssetPathName");
             if (icon is not (null or "None") && caption != null) break;
             var parent = (string?)Get(exports.FirstOrDefault(e => (string?)e["Type"] == "BlueprintGeneratedClass")?["SuperStruct"], "ObjectPath");
             esPackage = parent != null && parent.StartsWith("SCUM/Content/", StringComparison.OrdinalIgnoreCase) ? parent[..parent.LastIndexOf('.')] : null;
         }
-        return new ItemInfo(itemClass, caption ?? "", description ?? "", icon is null or "None" ? null : icon, CategoryOf(itemClass), Weight: weight, Uses: uses);
+        return new ItemInfo(itemClass, caption ?? "", description ?? "", icon is null or "None" ? null : icon, CategoryOf(itemClass), Weight: weight, Uses: uses, Holds: holds);
     }
 
     /// <summary>
@@ -466,7 +470,7 @@ internal sealed class Localization
 public enum ItemCategory { Vegetables, Fruit, MeatFish, Dairy, Canned, Dry, Liquids, Dishes, Inedible, Other }
 
 /// <summary>An item of the game: object path of its class, caption and description (game language), icon texture.</summary>
-public sealed record ItemInfo(string Class, string Name, string Description, string? Icon, ItemCategory Category, bool IsLiquid = false, double? Weight = null, int? Uses = null)
+public sealed record ItemInfo(string Class, string Name, string Description, string? Icon, ItemCategory Category, bool IsLiquid = false, double? Weight = null, int? Uses = null, string? Holds = null)
 {
     public string ClassName => IngredientOption.ShortClass(Class);
 

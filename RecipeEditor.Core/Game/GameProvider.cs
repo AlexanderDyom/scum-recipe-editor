@@ -18,6 +18,9 @@ public sealed class GameProvider : IDisposable
     /// <summary>Stock paks only (top folder, not ~mods): what the unmodded game sees.</summary>
     public DefaultFileProvider Provider { get; }
 
+    /// <summary>Lock for loads that may run in parallel (icons, models): CUE4Parse readers are not meant for that.</summary>
+    public object Sync { get; } = new();
+
     private GameProvider(string paks, DefaultFileProvider provider)
     {
         Paks = paks;

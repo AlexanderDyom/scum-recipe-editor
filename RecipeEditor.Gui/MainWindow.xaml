@@ -19,6 +19,13 @@
         <Button DockPanel.Dock="Right" Style="{StaticResource IconBtn}" ToolTip="{l:T Settings}" Click="Settings_Click">
           <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" FontSize="15"/>
         </Button>
+        <!-- the game the mod is for: SCUM or SCUM Server, one click switches (when both are installed) -->
+        <Button x:Name="GameSwitch" DockPanel.Dock="Right" Style="{StaticResource Btn}" Margin="0,0,8,0" Click="GameSwitch_Click" Visibility="Collapsed">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock x:Name="GameSwitchIcon" Style="{StaticResource Icon}" FontSize="14" Margin="0,0,7,0"/>
+            <TextBlock x:Name="GameSwitchText"/>
+          </StackPanel>
+        </Button>
         <Button x:Name="UndoButton" DockPanel.Dock="Right" Style="{StaticResource IconBtn}" Margin="0,0,8,0" IsEnabled="False" ToolTip="{l:T UndoTip}" Click="Undo_Click"
                 AutomationProperties.Name="{l:T Undo}" ToolTipService.ShowOnDisabled="True">
           <TextBlock Style="{StaticResource Icon}" Text="&#xE7A7;" FontSize="15"/>

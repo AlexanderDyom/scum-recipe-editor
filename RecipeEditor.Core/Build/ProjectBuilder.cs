@@ -28,6 +28,8 @@ public sealed class BuildRequest
     public bool UpdateRegistry { get; init; } = true;
     /// <summary>ScumRegistryMerger.Cli.exe of the installed merger; null = not installed.</summary>
     public string? MergerCli { get; init; }
+    /// <summary>Also install into this game's Paks (and rebuild its registry): the SCUM client when building for SCUM Server.</summary>
+    public string? AlsoPaks { get; init; }
 }
 
 public sealed class BuildReport
@@ -109,10 +111,23 @@ public static class ProjectBuilder
             return report;
         }
 
+        InstallInto(req.Paks, "", pak, req, report, Step);
+        // SCUM Server: the same mod into the SCUM client too (ingredients and new recipes need it on the players' side)
+        if (req.AlsoPaks != null && report.InstalledPak != null) InstallInto(req.AlsoPaks, "-client", pak, req, report, Step);
+        return report;
+    }
+
+    /// <summary>
+    /// Installs the pak into <paramref name="paks"/>~mods and rebuilds that game's shared registry; steps are keyed with
+    /// <paramref name="suffix"/> ("" for the game of the project, "-client" for SCUM next to SCUM Server). It
+    /// stops early when the install fails or the registry is skipped.
+    /// </summary>
+    private static void InstallInto(string paks, string suffix, string pak, BuildRequest req, BuildReport report, Action<BuildStep> Step)
+    {
         // 3. install into ~mods (a running game would have locked the old pak: compare what landed there)
-        var mods = Path.Combine(req.Paks, "~mods");
+        var mods = Path.Combine(paks, "~mods");
         var target = Path.Combine(mods, Path.GetFileName(pak));
-        Step(new BuildStep("install", StepState.Running, "StepInstall"));
+        Step(new BuildStep("install" + suffix, StepState.Running, "StepInstall"));
         try
         {
             Directory.CreateDirectory(mods);
@@ -120,49 +135,52 @@ public static class ProjectBuilder
             var sig = Path.ChangeExtension(pak, ".sig");
             if (File.Exists(sig)) File.Copy(sig, Path.ChangeExtension(target, ".sig"), true);
             if (!File.ReadAllBytes(pak).AsSpan().SequenceEqual(File.ReadAllBytes(target))) throw new IOException("The pak in ~mods was not replaced.");
-            report.InstalledPak = target;
-            Step(new BuildStep("install", StepState.Ok, "StepInstalled", report.PakSize.ToString()));
+            if (suffix.Length == 0) report.InstalledPak = target;
+            Step(new BuildStep("install" + suffix, StepState.Ok, "StepInstalled", report.PakSize.ToString()));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Step(new BuildStep("install", StepState.Failed, "StepInstallFailed", null, ex.Message));
-            return report;
+            Step(new BuildStep("install" + suffix, StepState.Failed, "StepInstallFailed", null, ex.Message));
+            return;
         }
 
         // 4. shared registry of every mod in ~mods: the installed ScumRegistryMerger builds it, then (dry run) says how
         // every mod stands; the editor has no merger of its own (players download the program)
         if (!req.UpdateRegistry)
         {
-            Step(new BuildStep("registry", StepState.Warning, "StepRegistrySkipped"));
-            return report;
+            Step(new BuildStep("registry" + suffix, StepState.Warning, "StepRegistrySkipped"));
+            return;
         }
         if (req.MergerCli == null)
         {
-            Step(new BuildStep("registry", StepState.Warning, "StepRegistryNoMerger"));
-            return report;
+            Step(new BuildStep("registry" + suffix, StepState.Warning, "StepRegistryNoMerger"));
+            return;
         }
-        Step(new BuildStep("registry", StepState.Running, "StepRegistry"));
+        Step(new BuildStep("registry" + suffix, StepState.Running, "StepRegistry"));
         try
         {
-            var output = RunMergerCli(req.MergerCli, req.Paks, req.AesKey, dryRun: false);
+            var output = RunMergerCli(req.MergerCli, paks, req.AesKey, dryRun: false);
             report.Log.Add(output);
-            var check = RunMergerCli(req.MergerCli, req.Paks, req.AesKey, dryRun: true);
+            var check = RunMergerCli(req.MergerCli, paks, req.AesKey, dryRun: true);
             var states = ParseMods(check);
             foreach (var (file, state) in states.Where(m => m.State != "NotNeeded"))
-                report.Mods.Add((DisplayName(file), state == "Included"));
+                if (suffix.Length == 0) report.Mods.Add((DisplayName(file), state == "Included"));
             var baseFromGame = output.Contains("base: game registry", StringComparison.Ordinal);
             var issues = states.Where(m => m.State is "Missing" or "Unreadable").Select(m => $"{DisplayName(m.File)}: {m.State}")
+                .Concat(OtherVersionMods(check).Select(m => $"{DisplayName(m)}: built for another game version"))
                 .Concat(baseFromGame ? [] : ["base: a mod's copy of the game registry, not the game's own"]).ToList();
             var ok = issues.Count == 0;
-            Step(new BuildStep("registry", ok ? StepState.Ok : StepState.Warning, ok ? "StepRegistryOk" : "StepRegistryWarn",
-                string.Join(", ", report.Mods.Select(m => m.Mod)), string.Join("\n", issues)));
-            report.Ok = ok;
+            Step(new BuildStep("registry" + suffix, ok ? StepState.Ok : StepState.Warning, ok ? "StepRegistryOk" : "StepRegistryWarn",
+                string.Join(", ", states.Where(m => m.State != "NotNeeded").Select(m => DisplayName(m.File))), string.Join("\n", issues)));
+            report.Ok = ok && (suffix.Length == 0 || report.Ok);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Step(new BuildStep("registry", StepState.Failed, "StepRegistryFailed", null, ex.Message));
+            // no mod in ~mods ships a registry (only changes of game recipes): nothing to merge, nothing is wrong
+            if (ex.Message.Contains("No mod pak with a readable AssetRegistry.bin", StringComparison.Ordinal))
+                Step(new BuildStep("registry" + suffix, StepState.Warning, "StepRegistryNotNeeded"));
+            else Step(new BuildStep("registry" + suffix, StepState.Failed, "StepRegistryFailed", null, ex.Message));
         }
-        return report;
     }
 
     /// <summary>
@@ -181,6 +199,14 @@ public static class ProjectBuilder
         }
         return list;
     }
+
+    /// <summary>
+    /// Mods ScumRegistryMerger (from its version with game references) finds built for another game version: their
+    /// registry lacks records of this game or holds records it no longer has ("..., BUILT FOR ANOTHER GAME VERSION (...)").
+    /// </summary>
+    public static List<string> OtherVersionMods(string output) => output.Split('\n')
+        .Select(l => System.Text.RegularExpressions.Regex.Match(l, @"^\s+(\S.*?\.pak): .*BUILT FOR ANOTHER GAME VERSION"))
+        .Where(m => m.Success).Select(m => m.Groups[1].Value).ToList();
 
     /// <summary>pakchunk901-FoodMod_P.pak -> FoodMod (as ScumRegistryMerger names mods).</summary>
     public static string DisplayName(string pak)
@@ -241,6 +267,25 @@ public static class ProjectBuilder
     /// #SpawnItem commands to test the mod: cookbooks of the changed / new recipes (own books too) and the item of the
     /// first variant of every main slot.
     /// </summary>
+    /// <summary>An item that comes filled with <paramref name="resource"/> (ItemInfo.Holds), or null (also before the catalog is read).</summary>
+    private static string? BottleOf(ProjectDocument doc, string? resource) => resource == null ? null
+        : doc.Game.Items.Values.Where(i => i.Holds?.Equals(resource, StringComparison.OrdinalIgnoreCase) == true)
+            .OrderBy(i => i.Category == Game.ItemCategory.Inedible ? 1 : 0).ThenBy(i => i.Class, StringComparer.Ordinal).FirstOrDefault()?.Class;
+
+    /// <summary>
+    /// A mod for a server alone is enough: it only sets cooking time or temperature of game recipes (the server cooks with
+    /// them; checked in game: players still see the old time). Ingredients, cookware, new recipes, dishes and books are
+    /// checked by the player's game, so the players need the mod too (checked: an added slot works only with it).
+    /// </summary>
+    public static bool ServerAlone(RecipeProject p)
+    {
+        var c = p.Modkit.Cooking;
+        if (p.Modkit.Clones.Count > 0 || p.Modkit.Edits.Count > 0) return false;
+        if (c != null && (c.NewRecipes.Count > 0 || c.Books.Count > 0 || c.OwnBooks.Count > 0 || c.KnownByDefault.Count > 0 || c.ItemTexts.Count > 0)) return false;
+        return c == null || c.Recipes.Values.All(ops => ops.All(op => op.ValueKind == System.Text.Json.JsonValueKind.Array && op.GetArrayLength() >= 2
+            && op[0].GetString() == "set" && op[1].GetString() is "CookingTime" or "CookingTemperature"));
+    }
+
     public static List<string> SpawnCommands(ProjectDocument doc)
     {
         var p = doc.Project;
@@ -258,12 +303,23 @@ public static class ProjectBuilder
             }
         }
         lines.AddRange(books.Distinct(StringComparer.OrdinalIgnoreCase).Select(b => $"#SpawnItem {b} 1"));
+        // one item of every main slot (all are needed), and every item the mod puts into a slot, main or optional
         var items = new List<string>();
         foreach (var r in recipes)
-            if (doc.State(r) is { } s)
-                foreach (var slot in s.Live(Recipe.Groups.Main))
-                    if (slot.Options.FirstOrDefault(o => o.Item != null) is { } o)
-                        items.Add(Game.IngredientOption.ShortClass(o.Item));
+        {
+            if (doc.State(r) is not { } s) continue;
+            var game = doc.GameState(r);
+            foreach (var g in Recipe.Groups.All)
+                foreach (var slot in s.Live(g))
+                {
+                    var stock = slot.IsNew ? null : game?.Slots[g].FirstOrDefault(x => x.Origin == slot.Origin);
+                    var stockItems = new HashSet<string?>(stock?.Options.Select(o => o.Item) ?? [], StringComparer.OrdinalIgnoreCase);
+                    // a liquid can't be spawned: the bottle that holds it can (absinthe, isopropyl alcohol)
+                    var added = slot.Options.Select(o => o.Item ?? BottleOf(doc, o.Resource)).Where(i => i != null && !stockItems.Contains(i)).Select(i => i!);
+                    var first = g == Recipe.Groups.Main ? slot.Options.FirstOrDefault(o => o.Item != null)?.Item : null;
+                    items.AddRange(added.Prepend(first).Where(i => i != null).Select(i => Game.IngredientOption.ShortClass(i)));
+                }
+        }
         lines.AddRange(items.Distinct(StringComparer.OrdinalIgnoreCase).Select(i => $"#SpawnItem {i} 1"));
         return lines;
     }

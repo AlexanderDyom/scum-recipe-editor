@@ -201,6 +201,12 @@ public partial class SettingsWindow : Window
         }
         path.TextChanged += (_, _) => ShowPath();
         ShowPath();
+        // a server's textures are stripped: icons and models may come from the client (only for the editor's view)
+        if (client != null)
+        {
+            var g = Group();
+            Line(g, Loc.T("SetVisualsFromClient"), Loc.T("SetVisualsFromClientDesc"), Toggle(_s.VisualsFromClient == true, v => _s.VisualsFromClient = v, "visualsfromclient"));
+        }
     }
 
     private void KeySection()
@@ -431,10 +437,13 @@ public partial class SettingsWindow : Window
             _s.AesKey = key;
         }
         var languageChanged = _s.Language != _startLanguage;
+        var visualsChanged = _s.VisualsFromClient != App.Settings.VisualsFromClient || _s.Kind != App.Settings.Kind;
         App.Apply(_s);
         if (gameChanged && _checkedGame != null) Session.Start(_checkedGame);
+        else if (visualsChanged) Session.OpenVisuals();
         else if (languageChanged) Session.Reload();
         Session.RefreshMerger(checkOnline: false);
+        Session.AskClientVisuals(this); // switched to SCUM Server just now
         DialogResult = true;
     }
 }

@@ -128,6 +128,7 @@ public partial class BuildWindow : Window
         {
             Paks = Paks, AesKey = key, Install = Install, OutputFolder = Install ? null : FolderBox.Text,
             UpdateRegistry = RegistryBox.IsChecked == true, MergerCli = Session.MergerCli,
+            AlsoPaks = Install && AlsoClientBox.Visibility == Visibility.Visible && AlsoClientBox.IsChecked == true ? ClientPaks : null,
         };
         var progress = new Progress<BuildStep>(ShowStep);
         var project = RecipeProject.Open(Project.Folder); // what is saved on disk
@@ -194,15 +195,17 @@ public partial class BuildWindow : Window
         row.Detail.Text = showDetail ? s.Detail : "";
         row.Detail.Foreground = (Brush)FindResource(s.State == StepState.Failed ? "Danger" : "Warn");
         row.Detail.Visibility = showDetail ? Visibility.Visible : Visibility.Collapsed;
+        if (s.Key == "registry")
+            RegistryHelp.Visibility = s.State is StepState.Warning or StepState.Failed && Session.MergerExe != null ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private static string StepText(BuildStep s) => s.Text switch
+    private static string StepText(BuildStep s) => (s.Text switch
     {
         "StepRegistryOk" or "StepRegistryWarn" => Loc.F(s.Text, s.Result is { Length: > 0 } mods ? mods.Split(", ").Length : 0),
         _ => Loc.T(s.Text),
-    };
+    }) + (s.Key.EndsWith("-client", StringComparison.Ordinal) ? Loc.T("StepClientSuffix") : "");
 
-    private static string StepResult(BuildStep s) => s.Key switch
+    private static string StepResult(BuildStep s) => s.Key.Replace("-client", "") switch
     {
         "clones" or "edits" when s.State == StepState.Ok => Loc.P("PackagesCount", int.Parse(s.Result ?? "0")),
         "check" when s.State != StepState.Running => Loc.P("ProblemsCount", int.Parse(s.Result ?? "0")),
@@ -234,9 +237,25 @@ public partial class BuildWindow : Window
         MergerActionButton.Visibility = !installed || Session.MergerUpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
         MergerActionButton.IsEnabled = !_downloading;
         RegistryPanel.Visibility = Install ? Visibility.Visible : Visibility.Collapsed;
+        ShowServer();
+        OpenMergerButton.Visibility = Session.MergerExe != null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private bool _registryTouched;
+
+    /// <summary>The SCUM client's Paks when the mod is for SCUM Server and the client is installed here, else null.</summary>
+    private static string? ClientPaks => App.Settings.Kind == ScumModKit.Game.InstallKind.Server
+        ? ScumModKit.Game.GameLocator.ResolvePaks(ScumModKit.Game.GameLocator.FindInstall(ScumModKit.Game.InstallKind.Client)) : null;
+
+    /// <summary>Building for SCUM Server: say what the players need, offer to install into the SCUM client too.</summary>
+    private void ShowServer()
+    {
+        var server = App.Settings.Kind == ScumModKit.Game.InstallKind.Server;
+        ServerPanel.Visibility = server ? Visibility.Visible : Visibility.Collapsed;
+        if (!server) return;
+        ServerText.Text = Loc.T(ProjectBuilder.ServerAlone(Project) ? "ServerAloneOk" : "ServerNeedsClients");
+        AlsoClientBox.Visibility = Install && ClientPaks != null ? Visibility.Visible : Visibility.Collapsed;
+    }
     private bool _downloading;
 
     /// <summary>Downloads ScumRegistryMerger (window app + console part) from its latest GitHub release, or updates it.</summary>
@@ -272,4 +291,12 @@ public partial class BuildWindow : Window
 
     private void MergerPage_Click(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo(MergerLink.PageUrl) { UseShellExecute = true });
+
+    /// <summary>The ScumRegistryMerger window: every mod's state (e.g. built for another game version), its own settings.</summary>
+    private void OpenMerger_Click(object sender, RoutedEventArgs e)
+    {
+        if (Session.MergerExe is not { } exe) return;
+        try { Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true }); }
+        catch (Exception ex) { Dialog.Show(this, Loc.T("OpenMerger"), ex.Message, Loc.T("Close"), icon: ""); }
+    }
 }

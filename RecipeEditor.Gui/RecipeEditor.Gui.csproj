@@ -8,9 +8,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>ScumRecipeEditor</AssemblyName>
     <RootNamespace>RecipeEditor.Gui</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <!-- shown to users; "b" = beta -->
-    <InformationalVersion>0.1.0b</InformationalVersion>
+    <InformationalVersion>0.1.1b</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>SCUM Recipe Editor</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>

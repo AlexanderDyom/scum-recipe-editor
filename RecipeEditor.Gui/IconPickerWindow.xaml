@@ -4,68 +4,118 @@
         xmlns:l="clr-namespace:RecipeEditor.Gui"
         Style="{StaticResource AppWindow}" Title="SCUM Recipe Editor"
         Width="700" Height="600" MinWidth="560" MinHeight="420" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Window.Resources>
+    <!-- the big tabs of the window: "dish icon" / "3D model of the dish" -->
+    <Style TargetType="RadioButton" x:Key="TabHead">
+      <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+      <Setter Property="FontSize" Value="17"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="b" Background="{StaticResource Surface2}" BorderBrush="Transparent" BorderThickness="1,1,1,0" CornerRadius="6,6,0,0" Padding="16,8" Margin="0,0,4,0">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{StaticResource Hover}"/></Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="b" Property="Background" Value="{StaticResource AccentBg}"/>
+                <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{StaticResource AccentText}"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
   <DockPanel>
-    <StackPanel DockPanel.Dock="Top" Margin="18,16,18,10">
-      <TextBlock x:Name="Heading" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,10" TextTrimming="CharacterEllipsis"/>
-      <TextBox x:Name="SearchBox" Style="{StaticResource SearchField}" Tag="{l:T IconSearch}" TextChanged="SearchBox_TextChanged"/>
-      <WrapPanel x:Name="Chips" Margin="0,10,0,0"/>
-    </StackPanel>
+    <Border x:Name="TabBar" DockPanel.Dock="Top" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="12,10,12,0" Visibility="Collapsed">
+      <StackPanel Orientation="Horizontal">
+        <RadioButton x:Name="IconTabHead" Style="{StaticResource TabHead}" GroupName="page" Content="{l:T IconTabHead}" IsChecked="True" Checked="Page_Checked"
+                     AutomationProperties.Name="{l:T IconTabHead}"/>
+        <RadioButton x:Name="ModelTabHead" Style="{StaticResource TabHead}" GroupName="page" Content="{l:T ModelTabHead}" Checked="Page_Checked"
+                     AutomationProperties.Name="{l:T ModelTabHead}"/>
+      </StackPanel>
+    </Border>
     <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="18,12">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-          <Button Style="{StaticResource Btn}" Content="{l:T Cancel}" IsCancel="True" Margin="0,0,8,0"/>
-          <Button x:Name="OkButton" Style="{StaticResource Primary}" Content="{l:T ChooseIconOk}" IsDefault="True" IsEnabled="False" Click="Ok_Click"
-                  AutomationProperties.Name="{l:T ChooseIconOk}"/>
+          <Button x:Name="CancelButton" Style="{StaticResource Btn}" Content="{l:T Cancel}" IsCancel="True" Margin="0,0,8,0"/>
+          <Button x:Name="OkButton" Style="{StaticResource Primary}" Content="{l:T ChooseIconOk}" IsDefault="True" IsEnabled="False" Click="Ok_Click"/>
         </StackPanel>
         <TextBlock x:Name="Info" Style="{StaticResource Small}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
       </DockPanel>
     </Border>
     <Grid>
-      <!-- rows of cells: only the visible rows are made (about 2000 icons in "all icons") -->
-      <ItemsControl x:Name="Rows" Padding="14,0,6,0" SizeChanged="Rows_SizeChanged"
-                    VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
-        <ItemsControl.Template>
-          <ControlTemplate TargetType="ItemsControl">
-            <ScrollViewer CanContentScroll="True" Padding="{TemplateBinding Padding}" Focusable="False" VerticalScrollBarVisibility="Auto">
-              <ItemsPresenter/>
-            </ScrollViewer>
-          </ControlTemplate>
-        </ItemsControl.Template>
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <ItemsControl ItemsSource="{Binding}" Focusable="False">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="{x:Type l:IconChoice}">
-                  <Button Style="{StaticResource Bare}" Click="Cell_Click" MouseDoubleClick="Cell_DoubleClick" Margin="0,0,8,8"
-                          AutomationProperties.Name="{Binding AutoName}" ToolTip="{Binding Tip}">
-                    <Border x:Name="b" Width="100" Height="118" Background="{StaticResource Surface}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="6,8,6,6">
-                      <StackPanel>
-                        <l:IconView Width="52" Height="52" Texture="{Binding Texture}" Fallback="?"/>
-                        <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{StaticResource Text}" TextAlignment="Center" TextWrapping="Wrap"
-                                   TextTrimming="CharacterEllipsis" Height="42" Margin="0,5,0,0" LineHeight="14"/>
-                      </StackPanel>
-                    </Border>
-                  </Button>
-                  <DataTemplate.Triggers>
-                    <Trigger SourceName="b" Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{StaticResource Surface2}"/></Trigger>
-                    <DataTrigger Binding="{Binding Selected}" Value="True">
-                      <Setter TargetName="b" Property="Background" Value="{StaticResource AccentBg}"/>
-                      <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
-                    </DataTrigger>
-                  </DataTemplate.Triggers>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <TextBlock x:Name="Message" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition x:Name="ModelColumn" Width="0"/>
+      </Grid.ColumnDefinitions>
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="18,16,18,10">
+          <TextBlock x:Name="Heading" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,10" TextTrimming="CharacterEllipsis"/>
+          <TextBox x:Name="SearchBox" Style="{StaticResource SearchField}" Tag="{l:T IconSearch}" TextChanged="SearchBox_TextChanged"/>
+          <WrapPanel x:Name="Chips" Margin="0,10,0,0"/>
+        </StackPanel>
+        <Grid>
+          <!-- rows of cells: only the visible rows are made (about 2000 icons in "all icons") -->
+          <ItemsControl x:Name="Rows" Padding="14,0,6,0" SizeChanged="Rows_SizeChanged"
+                        VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
+            <ItemsControl.Template>
+              <ControlTemplate TargetType="ItemsControl">
+                <ScrollViewer CanContentScroll="True" Padding="{TemplateBinding Padding}" Focusable="False" VerticalScrollBarVisibility="Auto">
+                  <ItemsPresenter/>
+                </ScrollViewer>
+              </ControlTemplate>
+            </ItemsControl.Template>
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <ItemsControl ItemsSource="{Binding}" Focusable="False">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type l:IconChoice}">
+                      <Button Style="{StaticResource Bare}" Click="Cell_Click" MouseDoubleClick="Cell_DoubleClick" Margin="0,0,8,8"
+                              AutomationProperties.Name="{Binding AutoName}" ToolTip="{Binding Tip}">
+                        <Border x:Name="b" Width="100" Height="118" Background="{StaticResource Surface}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="6,8,6,6">
+                          <StackPanel>
+                            <l:IconView Width="52" Height="52" Texture="{Binding Texture}" Fallback="?"/>
+                            <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{StaticResource Text}" TextAlignment="Center" TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis" Height="42" Margin="0,5,0,0" LineHeight="14"/>
+                          </StackPanel>
+                        </Border>
+                      </Button>
+                      <DataTemplate.Triggers>
+                        <Trigger SourceName="b" Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{StaticResource Surface2}"/></Trigger>
+                        <DataTrigger Binding="{Binding Selected}" Value="True">
+                          <Setter TargetName="b" Property="Background" Value="{StaticResource AccentBg}"/>
+                          <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                        </DataTrigger>
+                      </DataTemplate.Triggers>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock x:Name="Message" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+        </Grid>
+      </DockPanel>
+      <!-- the 3D model of the chosen dish and what to take from it -->
+      <Border x:Name="ModelPanel" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0" Visibility="Collapsed">
+        <DockPanel>
+          <StackPanel x:Name="ModelOptions" DockPanel.Dock="Bottom" Margin="16,12,16,14"/>
+          <l:ModelView x:Name="Viewer"/>
+        </DockPanel>
+      </Border>
     </Grid>
   </DockPanel>
 </Window>

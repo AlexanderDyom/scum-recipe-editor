@@ -146,10 +146,56 @@ public partial class MainWindow : Window
             Loc.Instance.PropertyChanged -= OnLanguage;
         };
         ShowProjectStatus();
+        ShowGameSwitch();
         Load();
     }
 
-    private void OnSession() => Load();
+    private void OnSession()
+    {
+        ShowGameSwitch();
+        Load();
+    }
+
+    /// <summary>"SCUM" or "SCUM Server": the game the editor reads and the mod is installed into; shown when both are installed.</summary>
+    private void ShowGameSwitch()
+    {
+        var both = ScumModKit.Game.GameLocator.FindInstall(ScumModKit.Game.InstallKind.Client) != null
+                   && ScumModKit.Game.GameLocator.FindInstall(ScumModKit.Game.InstallKind.Server) != null;
+        GameSwitch.Visibility = both ? Visibility.Visible : Visibility.Collapsed;
+        var server = App.Settings.Kind == ScumModKit.Game.InstallKind.Server;
+        GameSwitchText.Text = Loc.T(server ? "Server" : "Client");
+        GameSwitchIcon.Text = server ? "" : "";
+        GameSwitch.ToolTip = Loc.F("GameSwitchTip", Loc.T(server ? "Server" : "Client"), Loc.T(server ? "Client" : "Server"));
+        System.Windows.Automation.AutomationProperties.SetName(GameSwitch, "gameswitch");
+    }
+
+    /// <summary>Switches between SCUM and SCUM Server (found in Steam): the other game is opened with the same key.</summary>
+    private async void GameSwitch_Click(object sender, RoutedEventArgs e)
+    {
+        var other = App.Settings.Kind == ScumModKit.Game.InstallKind.Server ? ScumModKit.Game.InstallKind.Client : ScumModKit.Game.InstallKind.Server;
+        if (ScumModKit.Game.GameLocator.FindInstall(other) is not { } folder || App.Settings.AesKey is not { } key) return;
+        GameSwitch.IsEnabled = false;
+        GameSwitchText.Text = Loc.T("PickerLoading");
+        try
+        {
+            var game = await Task.Run(() => GameProvider.Open(folder, key));
+            var s = App.Settings.Clone();
+            s.Kind = other;
+            s.GameFolder = folder;
+            App.Apply(s);
+            Session.Start(game);
+            Session.AskClientVisuals(this);
+        }
+        catch (Exception ex)
+        {
+            Dialog.Show(this, Loc.T("SettingsGameTitle"), ex.Message, Loc.T("Close"), icon: "");
+        }
+        finally
+        {
+            GameSwitch.IsEnabled = true;
+            ShowGameSwitch();
+        }
+    }
 
     private void OnLanguage(object? s, PropertyChangedEventArgs e)
     {
@@ -436,9 +482,11 @@ public partial class MainWindow : Window
         var plate = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         plate.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
         plate.ColumnDefinitions.Add(new ColumnDefinition());
-        plate.Children.Add(IconBox(_doc.ItemIcon(dish), _row!.Initial, ReadOnly ? null : PickRecipeIcon, "recipeicon"));
+        plate.Children.Add(IconBox(_doc.ItemIcon(dish), _row!.Initial, ReadOnly ? null : () => PickRecipeIcon(), "recipeicon"));
         var text = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = Loc.F("ModelAs", _game!.ItemName(template)), FontSize = 13, TextWrapping = TextWrapping.Wrap });
+        if (_state is { } cs && _doc.CookLook(cs.Id) is { } cookDish)
+            text.Children.Add(new TextBlock { Text = Loc.F("CookAsLine", _game.ItemName(cookDish)), FontSize = 12, Foreground = Res("Text2"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
         if (own) text.Children.Add(new TextBlock { Text = Loc.T("OwnIconChosen"), FontSize = 12, Foreground = Res("Muted"), Margin = new Thickness(0, 2, 0, 0) });
         if (!ReadOnly)
         {
@@ -446,6 +494,10 @@ public partial class MainWindow : Window
             pick.Click += (_, _) => PickRecipeIcon();
             AutoName(pick, "chooseicon");
             text.Children.Add(pick);
+            var pickModel = new Button { Content = Loc.T("ChooseModel"), Style = (Style)FindResource("Link"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
+            pickModel.Click += (_, _) => PickRecipeIcon(openModel: true);
+            AutoName(pickModel, "choosemodel");
+            text.Children.Add(pickModel);
             if (own)
             {
                 var reset = new Button { Content = Loc.T("IconAsModel"), Style = (Style)FindResource("Link"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
@@ -464,13 +516,26 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>Icon of a new recipe's dish: ready dishes, other food, every icon of the game.</summary>
-    private void PickRecipeIcon()
+    /// <summary>
+    /// Icon and 3D model of a new recipe's dish (one window, two pages). The model: the dish is copied from the chosen
+    /// game dish; the look in the cookware is copied from the game's recipe of that dish (ScumModKit copyProperties).
+    /// </summary>
+    private void PickRecipeIcon(bool openModel = false)
     {
         var dish = _state?.Result;
-        if (dish == null || _doc?.TemplateClass(dish) == null || ReadOnly) return;
-        var icon = ChooseIcon(Loc.T("RecipeIconTitle"), [IconTab.Dishes(), IconTab.Food(), IconTab.All()], _doc.ItemIcon(dish));
-        if (icon != null) SetRecipeIcon(icon);
+        if (dish == null || _doc?.DishModel(dish) is not { } model || ReadOnly) return;
+        var shown = _doc.ItemIcon(dish);
+        var w = new IconPickerWindow(this, Loc.T("RecipeIconTitle"), [IconTab.Dishes(), IconTab.Food(), IconTab.All()], shown,
+            new ModelPick(model, Dish: true, Cook: true), openModel);
+        if (w.ShowDialog() != true) return;
+        if (w.ModelDish && w.ModelResult != null && !w.ModelResult.Equals(model, StringComparison.OrdinalIgnoreCase))
+            _doc.SetDishModel(dish, w.ModelResult);
+        if (w.ModelCook && w.ModelResult != null && _state is { } st) _doc.SetCookLook(st.Id, w.ModelResult);
+        if (!string.Equals(w.Result, shown, StringComparison.OrdinalIgnoreCase)) _doc.SetIcon(dish, w.Result);
+        _row?.Refresh();
+        Render();
+        ShowProjectStatus();
+        ScheduleAutoSave();
     }
 
     private void SetRecipeIcon(string? icon)
@@ -486,6 +551,36 @@ public partial class MainWindow : Window
     private void DishIcon_Click(object sender, MouseButtonEventArgs e)
     {
         if (_row?.Entry.IsNew == true) PickRecipeIcon();
+    }
+
+    /// <summary>
+    /// A container item (a bottle) taken whole goes with everything in it, bottle included (checked in game: isopropyl
+    /// alcohol). Say so and, for a slot of just this variant, offer its liquid in millilitres instead.
+    /// </summary>
+    private void ContainerWarning(Slot s, SlotOption o)
+    {
+        if (o.IsResource || o.Item == null || _game!.Items.GetValueOrDefault(o.Item) is not { Holds: { } liquid }) return;
+        var liquidName = _game.ItemName(liquid);
+        var box = new StackPanel();
+        box.Children.Add(new TextBlock { Text = Loc.F("ContainerWhole", liquidName), Foreground = Res("Warn"), FontSize = 12, TextWrapping = TextWrapping.Wrap });
+        if (!ReadOnly && s.Options.Count == 1)
+        {
+            var use = new Button { Content = Loc.F("UseLiquidInstead", liquidName), Style = (Style)FindResource("Link"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) };
+            use.Click += (_, _) =>
+            {
+                Remember("liquid");
+                o.Item = null;
+                o.Resource = liquid;
+                o.Whole = true;
+                o.Usage = 1;
+                o.Liters = 0.25;
+                s.IsResource = true;
+                Render();
+            };
+            AutoName(use, "useliquid");
+            box.Children.Add(use);
+        }
+        Inspector.Children.Add(new Border { Style = (Style)FindResource("Callout"), Background = Res("WarnBg"), Margin = new Thickness(0, 10, 0, 0), Child = box });
     }
 
     /// <summary>The icon picker: the chosen texture, or null when cancelled.</summary>
@@ -792,6 +887,7 @@ public partial class MainWindow : Window
         row.Children.Add(nut);
         Inspector.Children.Add(row);
         Inspector.Children.Add(Small(Loc.T(sel0.IsResource ? "LiquidNote" : "NutrientNote"), 4));
+        ContainerWarning(s, sel0);
         if (!ReadOnly && s.Options.Count > 1)
             Inspector.Children.Add(Button("", Loc.T("AmountToAll"), "Btn", () =>
             {
@@ -1082,9 +1178,14 @@ public partial class MainWindow : Window
         ScheduleAutoSave();
     }
 
-    /// <summary>The dish model comes in a later version: say so instead of doing nothing.</summary>
-    private void Model_Click(object sender, RoutedEventArgs e) =>
-        Dialog.Show(this, Loc.T("ModelSoonTitle"), Loc.T("ModelSoonText"), Loc.T("Close"), icon: "");
+    /// <summary>The recipe's dish in 3D, as the mod makes it (a new dish shows the dish it copies). Only to look: a new
+    /// dish's model is chosen together with its icon.</summary>
+    private void Model_Click(object sender, RoutedEventArgs e)
+    {
+        if (_state?.Result is not { } dish) return;
+        var model = _doc?.DishModel(dish) ?? dish;
+        new IconPickerWindow(this, Loc.T("ModelTabHead"), [], null, new ModelPick(model, ReadOnly: true), openModel: true).ShowDialog();
+    }
 
     private void Save_Click(object sender, RoutedEventArgs e) => Save();
 

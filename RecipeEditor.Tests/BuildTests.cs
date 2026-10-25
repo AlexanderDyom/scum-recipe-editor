@@ -20,6 +20,12 @@ public sealed class BuildTests(GameFixture f)
             var s = doc.State("Cook_Dish_Cake_Pancake")!;
             s.CookingTime = 30;
             s.Main.First(x => x.TitleSource == "Milk").Removed = true;
+            // an optional slot of the mod: its item is in the spawn commands too
+            var cucumber = f.Ru!.Items.Keys.First(k => k.EndsWith("/Cucumber.Cucumber_C", StringComparison.OrdinalIgnoreCase));
+            s.Optional.Add(new Slot { Title = "Cucumber", TitleSource = "Cucumber", TitleEdited = true, Options = [new SlotOption { Item = cucumber, Whole = true, Usage = 1, Liters = 1 }] });
+            // a liquid of the mod: the bottle that holds it goes into the spawn commands
+            s.Optional.Add(new Slot { Title = "Alcohol", TitleSource = "Alcohol", TitleEdited = true, IsResource = true,
+                Options = [new SlotOption { Resource = "/Game/ConZ_Files/GameResources/Food/Liquids/IsopropylAlcohol.IsopropylAlcohol_C", Whole = true, Usage = 1, Liters = 0.25 }] });
             doc.Set(s);
             doc.Save();
 
@@ -37,9 +43,13 @@ public sealed class BuildTests(GameFixture f)
             Assert.True(File.Exists(Path.Combine(dir, "release", "pakchunk952-FolderBuild_P.sig")));
             Assert.True(report.PakSize > 1000);
 
+            f.Ru!.LoadCatalog(f.Game);
+            f.Ru.LoadInedible(f.Game);
             var spawn = ProjectBuilder.SpawnCommands(new ProjectDocument(RecipeProject.Open(project.Folder), f.Ru!));
+            Assert.Contains("#SpawnItem Isopropyl_alcohol 1", spawn);
             Assert.Contains("#SpawnItem Book_Cooking_Cake 1", spawn);
             Assert.Contains("#SpawnItem WhiteFlour 1", spawn);
+            Assert.Contains("#SpawnItem Cucumber 1", spawn);
         }
         finally
         {
@@ -131,6 +141,21 @@ public sealed class MergerOutputTests
         Assert.Equal("FoodMod", RecipeEditor.Core.Build.ProjectBuilder.DisplayName("pakchunk901-FoodMod_P.pak"));
         Assert.Equal("ModsRegistry", RecipeEditor.Core.Build.ProjectBuilder.DisplayName("pakchunk999-ModsRegistry_999_P.pak"));
     }
+
+    /// <summary>ScumRegistryMerger with game references marks mods built for another game version.</summary>
+    [Fact]
+    public void FindsModsOfAnotherGameVersion()
+    {
+        const string output = """
+            game registry: readable
+            game version 1a2b: mods checked against the game's own registry
+              pakchunk900-ChestMod_P.pak: 408 new records, Included
+              pakchunk905-OldMod_P.pak: 20 new records, Missing, BUILT FOR ANOTHER GAME VERSION (12 records of another version, 3 game records missing)
+            """;
+        var mods = RecipeEditor.Core.Build.ProjectBuilder.ParseMods(output);
+        Assert.Equal([("pakchunk900-ChestMod_P.pak", "Included"), ("pakchunk905-OldMod_P.pak", "Missing")], mods);
+        Assert.Equal(["pakchunk905-OldMod_P.pak"], RecipeEditor.Core.Build.ProjectBuilder.OtherVersionMods(output));
+    }
 }
 
 [Collection("game")]
@@ -204,6 +229,39 @@ public sealed class NewRecipeTests(GameFixture f)
             Assert.DoesNotContain(saladIcon.Split('.')[0], es);
             var bookEs = System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(Path.Combine(stage, "SCUM", "Content", "ConZ_Files", "Items", "Books", "Cookbooks", book + "_ES.uasset")));
             Assert.Contains(pizzaIcon, bookEs);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+}
+
+[Collection("game")]
+public sealed class ServerModTests(GameFixture f)
+{
+    /// <summary>Only cooking time / temperature: the server alone is enough; an ingredient slot needs the players too.</summary>
+    [Fact]
+    public void TellsWhenTheServerAloneIsEnough()
+    {
+        if (!f.Available) return;
+        var dir = Path.Combine(Path.GetTempPath(), "RecipeEditorTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var project = RecipeProject.Create(Path.Combine(dir, "ServerMod"), "ServerMod", 953, null);
+            Assert.True(ProjectBuilder.ServerAlone(RecipeProject.Open(project.Folder)));
+            var doc = new ProjectDocument(project, f.Ru!);
+            var s = doc.State("Cook_Dish_Salad_Fruit")!;
+            s.CookingTime = 300;
+            s.CookingTemperature = 30;
+            doc.Set(s);
+            doc.Save();
+            Assert.True(ProjectBuilder.ServerAlone(RecipeProject.Open(project.Folder)));
+            s = doc.State("Cook_Dish_Salad_Fruit")!;
+            s.Optional.Add(new Slot { Title = "Egg", TitleSource = "Egg", TitleEdited = true, Options = [new SlotOption { Item = "/Game/ConZ_Files/Items/Food/MeatAndAnimalProducts/Egg.Egg_C", Whole = true, Usage = 1, Liters = 1 }] });
+            doc.Set(s);
+            doc.Save();
+            Assert.False(ProjectBuilder.ServerAlone(RecipeProject.Open(project.Folder)));
         }
         finally
         {

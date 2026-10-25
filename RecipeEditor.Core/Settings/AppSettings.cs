@@ -31,6 +31,12 @@ public sealed class AppSettings
     /// <summary>Take the game folder and the AES key from ScumRegistryMerger's settings (one setup for both programs).</summary>
     public bool UseMergerSettings { get; set; } = true;
 
+    /// <summary>
+    /// With SCUM Server: show icons and 3D models from the SCUM client's paks (a server's textures are stripped). Only for
+    /// the editor's view; the mod and the server are not touched. Null: not asked yet.
+    /// </summary>
+    public bool? VisualsFromClient { get; set; }
+
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ScumRecipeEditor");
     public static string DefaultPath => Path.Combine(Folder, "settings.json");
 

@@ -23,6 +23,7 @@ public sealed class ProjectDocument
         Game = game;
         foreach (var e in project.Modkit.Edits)
             if (IconOfEdit(e) is { } icon) _icons[icon.Package] = icon.Icon;
+            else if (CookOfEdit(e) is { } cook) _cookLooks[cook.Recipe] = cook.From;
     }
 
     /// <summary>The game recipe a recipe starts from: itself, or the template a new recipe was cloned from.</summary>
@@ -90,6 +91,8 @@ public sealed class ProjectDocument
         {
             _icons.Clear();
             foreach (var (k, v) in old._icons) _icons[k] = v;
+            _cookLooks.Clear();
+            foreach (var (k, v) in old._cookLooks) _cookLooks[k] = v;
             ListsDirty = true;
         }
     }
@@ -128,9 +131,10 @@ public sealed class ProjectDocument
             cooking["newRecipes"] = JsonSerializer.SerializeToNode(c.NewRecipes, Json);
             cooking["itemTexts"] = JsonSerializer.SerializeToNode(c.ItemTexts, Json);
             root["clones"] = new JsonArray(Project.Modkit.Clones.Select(CloneNode).ToArray());
-            // the editor's icon edits are made anew; every other edit stays as it is
-            var edits = (root["edits"] as JsonArray)?.Where(e => e?["editor"]?.GetValue<string>() != IconEditor).Select(e => e!.DeepClone()).ToList() ?? [];
+            // the editor's icon and cookware-look edits are made anew; every other edit stays as it is
+            var edits = (root["edits"] as JsonArray)?.Where(e => e?["editor"]?.GetValue<string>() is not (IconEditor or CookEditor)).Select(e => e!.DeepClone()).ToList() ?? [];
             edits.AddRange(IconEdits());
+            edits.AddRange(CookEdits());
             if (edits.Count > 0 || root["edits"] != null) root["edits"] = new JsonArray([.. edits]);
         }
         var text = root.ToJsonString(Json) + "\n";
@@ -266,11 +270,15 @@ public sealed class ProjectDocument
     /// (<paramref name="learnFrom"/> = book id, or "known"). From scratch: every slot of the template is removed (the
     /// editor hides them), the user adds his own. Returns the recipe id.
     /// </summary>
-    public string CreateRecipe(string template, string name, string description, bool fromScratch, string learnFrom, string? icon = null)
+    public string CreateRecipe(string template, string name, string description, bool fromScratch, string learnFrom, string? icon = null,
+        string? model = null)
     {
         if (!IsEnglishName(name)) throw new ArgumentException("English letters, digits and spaces only.", nameof(name));
         var tpl = Game.Recipe(template) ?? throw new ArgumentException($"No recipe {template}.");
-        var dishTemplate = tpl.Result?.Split('.')[0] ?? throw new InvalidOperationException($"{template} makes no dish.");
+        // the dish is a copy of the dish whose model was chosen (its mesh, materials, how it is held), else of the template's
+        var dishTemplate = model != null ? PackageOf(model) : tpl.Result?.Split('.')[0] ?? throw new InvalidOperationException($"{template} makes no dish.");
+        if (model != null && !Game.Recipes.Any(r => r.Result?.Equals(model, StringComparison.OrdinalIgnoreCase) == true))
+            throw new ArgumentException($"{model} is not a dish of the game.", nameof(model));
         var key = NameKey(name);
         var prefix = Project.Name;
         string recipeId = $"Cook_Dish_{prefix}_{key}", dishId = $"Dish_{prefix}_{key}";
@@ -298,6 +306,95 @@ public sealed class ProjectDocument
         _states[recipeId] = s;
         ListsDirty = true;
         return recipeId;
+    }
+
+    /// <summary>
+    /// The recipe a recipe "from scratch" is cloned from when the cookware should show <paramref name="model"/> while
+    /// cooking: the stock recipe making that dish (its CookProgressMesh), if it has main and optional slots for new ones
+    /// (modkit copies the first slot of a group); else the usual scratch template.
+    /// </summary>
+    public string ScratchTemplate(string? model)
+    {
+        var r = model == null ? null : Game.Recipes.FirstOrDefault(x => !x.Technical && x.Result?.Equals(model, StringComparison.OrdinalIgnoreCase) == true);
+        return r is { Main.Count: > 0, Optional.Count: > 0 } ? r.Id : ScratchTemplate();
+    }
+
+    /// <summary>The game dish a new dish of the mod copies (its model), or null for anything else.</summary>
+    public string? DishModel(string? dishClass) => TemplateClass(dishClass);
+
+    /// <summary>
+    /// Model of a new dish of the mod: its clone (+ _ES) now copies <paramref name="model"/> (a dish of the game): mesh,
+    /// materials, how it is held and its look while being eaten. Name and description stay; the icon is the new model's
+    /// unless an icon of its own was chosen.
+    /// </summary>
+    public void SetDishModel(string dishClass, string model)
+    {
+        var package = PackageOf(dishClass);
+        var clone = Project.Modkit.Clones.FirstOrDefault(c => c.New?.Equals(package, StringComparison.OrdinalIgnoreCase) == true)
+                    ?? throw new InvalidOperationException($"{dishClass} is not a dish of the mod.");
+        if (!Game.Recipes.Any(r => r.Result?.Equals(model, StringComparison.OrdinalIgnoreCase) == true))
+            throw new ArgumentException($"{model} is not a dish of the game.", nameof(model));
+        if (clone.Template?.Equals(PackageOf(model), StringComparison.OrdinalIgnoreCase) == true) return;
+        var own = _icons.GetValueOrDefault(package + "_ES");
+        clone.Template = PackageOf(model);
+        if (own != null) SetIcon(dishClass, own); // forgotten when it is the new model's own icon
+        ListsDirty = true;
+    }
+
+    // ------------------------------------------------------------------ look of a new recipe in the cookware
+
+    /// <summary>Marks the edits the editor makes for the cookware look (made anew on every save).</summary>
+    private const string CookEditor = "cook";
+
+    /// <summary>What the cooking shows in the cookware (CookProgressMesh and the rest), as in the game's recipe of that dish.</summary>
+    public static readonly string[] CookProperties =
+        ["CookProgressMesh", "CookProgressMeshMaterial", "CookProgressMeshMaterialSlot", "CookProgressMeshRelativeTransform", "UseMeshRelativeTransform"];
+
+    /// <summary>New recipe of the mod -> the game recipe whose cookware look it takes (else its template's).</summary>
+    private readonly Dictionary<string, string> _cookLooks = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The game dish whose cookware look a new recipe shows: the one chosen, else its template recipe's dish.</summary>
+    public string? CookLook(string recipe)
+    {
+        var from = _cookLooks.GetValueOrDefault(recipe) ?? Base(recipe)?.Id;
+        return from == null ? null : Game.Recipe(from)?.Result;
+    }
+
+    /// <summary>
+    /// The cookware look of a new recipe: as the game's recipe making <paramref name="dish"/> shows it while cooking
+    /// (ScumModKit copyProperties of <see cref="CookProperties"/>). The template's own dish = no edit.
+    /// </summary>
+    public void SetCookLook(string recipe, string dish)
+    {
+        if (!Project.NewRecipes.Contains(recipe, StringComparer.OrdinalIgnoreCase) && !Cooking.NewRecipes.Contains(recipe, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"{recipe} is not a new recipe of the mod.");
+        var from = Game.Recipes.FirstOrDefault(r => !r.Technical && r.Result?.Equals(dish, StringComparison.OrdinalIgnoreCase) == true)
+                   ?? throw new ArgumentException($"No game recipe makes {dish}.", nameof(dish));
+        if (from.Id.Equals(Base(recipe)?.Id, StringComparison.OrdinalIgnoreCase)) _cookLooks.Remove(recipe);
+        else _cookLooks[recipe] = from.Id;
+        ListsDirty = true;
+    }
+
+    /// <summary>{"op": "copyProperties", "editor": "cook", "package": recipe, "export": id, "from": game recipe, "fromExport": its id, "properties": [...]}.</summary>
+    private IEnumerable<JsonNode> CookEdits()
+    {
+        foreach (var (recipe, from) in _cookLooks.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!Cooking.NewRecipes.Contains(recipe, StringComparer.OrdinalIgnoreCase)) continue; // the recipe is gone
+            yield return new JsonObject
+            {
+                ["op"] = "copyProperties", ["editor"] = CookEditor, ["package"] = $"{RecipeFolder}/{recipe}", ["export"] = recipe,
+                ["from"] = $"{RecipeFolder}/{from}", ["fromExport"] = from,
+                ["properties"] = new JsonArray(CookProperties.Select(p => (JsonNode)JsonValue.Create(p)!).ToArray()),
+            };
+        }
+    }
+
+    private static (string Recipe, string From)? CookOfEdit(JsonElement e)
+    {
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("editor", out var ed) || ed.GetString() != CookEditor) return null;
+        if (!e.TryGetProperty("export", out var x) || !e.TryGetProperty("fromExport", out var f)) return null;
+        return x.GetString() is { } recipe && f.GetString() is { } from ? (recipe, from) : null;
     }
 
     public void DeleteOwnBook(string book)

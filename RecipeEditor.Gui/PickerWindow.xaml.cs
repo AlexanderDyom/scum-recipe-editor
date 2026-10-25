@@ -26,9 +26,11 @@ public sealed class PickerItem(ItemInfo item) : INotifyPropertyChanged
     public ItemInfo Item { get; } = item;
     public string Name => Item.Name;
     public string ClassName => Item.ClassName;
+    /// <summary>Second line of a cell: what kind of variant it is for a liquid or a container (they share names), else the class.</summary>
+    public string Sub => Item.IsLiquid ? Loc.T("SubLiquid") : Item.Holds != null ? Loc.T("SubContainer") : Item.ClassName;
     public string? Icon => Item.Icon;
     public string Initial => Item.Name.Length > 0 ? char.ToUpper(Item.Name[0]).ToString() : "?";
-    public string Tip => Item.Description.Length > 0 ? $"{Item.Name}\n{Item.Description}" : Item.Name;
+    public string Tip => $"{Item.Name} ({Item.ClassName})" + (Item.Description.Length > 0 ? $"\n{Item.Description}" : "");
     public string Search { get; } = $"{item.Name}\n{item.ClassName}\n{item.Class}".ToLowerInvariant();
 }
 
@@ -146,10 +148,22 @@ public partial class PickerWindow : Window
     {
         var p = _selected != null && _shown.Contains(_selected) ? _selected : null;
         OkButton.IsEnabled = p != null;
+        Info.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        Info.TextWrapping = TextWrapping.NoWrap;
         if (p == null) { Info.Text = Loc.F("PickerCount", _shown.Count); return; }
+        // no picture of its own (isopropyl alcohol as a liquid, waters...): the game shows some other icon in the slot
+        if (p.Icon == null)
+        {
+            Info.Text = Loc.F("NoIconWarning", p.Name);
+            Info.SetResourceReference(TextBlock.ForegroundProperty, "Warn");
+            Info.TextWrapping = TextWrapping.Wrap;
+            return;
+        }
         var parts = new List<string> { p.Name };
         if (p.Item.Weight is > 0 and var w) parts.Add(Loc.F("Grams", Math.Round(w)));
-        parts.Add(p.Item.IsLiquid ? Loc.T("CountsAsLiquid") : _countsAs ?? Loc.T("CountsWhole"));
+        parts.Add(p.Item.IsLiquid ? Loc.T("CountsAsLiquid")
+            : p.Item.Holds != null ? Loc.T("CountsContainer") // a bottle: goes whole, with what is in it
+            : _countsAs ?? Loc.T("CountsWhole"));
         Info.Text = string.Join(" · ", parts);
     }
 

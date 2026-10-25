@@ -153,4 +153,22 @@ public sealed class IconAndCatalogTests(GameFixture f)
         Assert.True(seconds < 120, $"{seconds:0} s");
         Console.WriteLine($"inedible: {inedible.Count} items in {seconds:0.0} s");
     }
+
+    /// <summary>A bottle knows its liquid; a liquid without a picture of its own stays without one (isopropyl alcohol).</summary>
+    [Fact]
+    public void ContainersKnowTheirLiquid()
+    {
+        if (!f.Available) return;
+        var game = GameData.Load(f.Game!, "ru");
+        const string liquid = "/Game/ConZ_Files/GameResources/Food/Liquids/IsopropylAlcohol.IsopropylAlcohol_C";
+        Assert.Null(game.ItemIcon(liquid)); // the game has no picture for it
+        game.LoadCatalog(f.Game!);
+        game.LoadInedible(f.Game!);
+        var bottle = game.Items["/Game/ConZ_Files/Items/Medications/Isopropyl_alcohol.Isopropyl_alcohol_C"];
+        Assert.Equal(liquid, bottle.Holds);
+        Assert.Null(game.ItemIcon(liquid));
+        Assert.NotNull(bottle.Icon);
+        Assert.True(game.Items[liquid].IsLiquid);
+    }
+
 }

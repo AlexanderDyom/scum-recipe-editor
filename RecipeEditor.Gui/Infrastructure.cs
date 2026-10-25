@@ -194,6 +194,18 @@ public static class Session
     /// <summary>Every texture of the game's item icon folder ("all icons" of the icon picker).</summary>
     public static Task<List<string>>? IconTextures { get; private set; }
     public static string? Paks => Game?.Paks;
+
+    private static Task<List<RecipeEditor.Core.Models.DishModel>>? _models;
+    /// <summary>Looks of every dish of the game (the "3D model" tab), read on first use after Data.</summary>
+    public static Task<List<RecipeEditor.Core.Models.DishModel>> DishModels
+    {
+        get
+        {
+            if (_models != null) return _models;
+            if (Game is not { } game || Data is not { } data) return Task.FromResult(new List<RecipeEditor.Core.Models.DishModel>());
+            return _models = data.ContinueWith(t => RecipeEditor.Core.Models.DishModels.Load(game, t.Result), TaskContinuationOptions.OnlyOnRanToCompletion);
+        }
+    }
     public static bool ServerFound { get; private set; }
 
     public static event Action? Changed;
@@ -208,11 +220,47 @@ public static class Session
     {
         if (!ReferenceEquals(Game, game)) Game?.Dispose();
         Game = game;
-        Icons = new IconCache(game);
-        IconLoader.Clear();
+        OpenVisuals();
         IconTextures = Task.Run(() => GameData.IconTextures(game));
         ServerFound = GameLocator.FindInstall(InstallKind.Server) != null;
         Reload();
+    }
+
+    /// <summary>
+    /// The paks icons and model textures come from: the game itself, or with SCUM Server (whose textures are stripped) the
+    /// SCUM client when the user agreed (<see cref="AppSettings.VisualsFromClient"/>). Recipes and items always come from Game.
+    /// </summary>
+    public static GameProvider? Visuals { get; private set; }
+
+    /// <summary>The visuals' provider and icon cache anew (after the game or the setting changed).</summary>
+    public static void OpenVisuals()
+    {
+        if (Game is not { } game) return;
+        if (Visuals != null && !ReferenceEquals(Visuals, game)) Visuals.Dispose();
+        Visuals = game;
+        if (App.Settings.Kind == InstallKind.Server && App.Settings.VisualsFromClient == true
+            && GameLocator.FindInstall(InstallKind.Client) is { } client && App.Settings.AesKey is { } key)
+        {
+            try { Visuals = GameProvider.Open(client, key); }
+            catch (Exception) { Visuals = game; } // the client is of another version or broken: no pictures, as before
+        }
+        Icons = new IconCache(Visuals);
+        IconLoader.Clear();
+        Changed?.Invoke();
+    }
+
+    /// <summary>SCUM Server chosen, the client is installed and the user was not asked yet whether to take pictures from it.</summary>
+    public static bool OfferClientVisuals => App.Settings.Kind == InstallKind.Server && App.Settings.VisualsFromClient == null
+                                             && GameLocator.FindInstall(InstallKind.Client) != null;
+
+    /// <summary>Asks once (SCUM Server and the client installed) whether to show icons and models from the client.</summary>
+    public static void AskClientVisuals(Window? owner)
+    {
+        if (!OfferClientVisuals) return;
+        var yes = Dialog.Show(owner, Loc.T("VisualsTitle"), Loc.T("VisualsText"), Loc.T("VisualsYes"), Loc.T("VisualsNo"), icon: "");
+        App.Settings.VisualsFromClient = yes;
+        App.Settings.Save();
+        if (yes) OpenVisuals();
     }
 
     /// <summary>Re-reads the data (e.g. in another language).</summary>
@@ -222,6 +270,7 @@ public static class Session
         var game = Game;
         var lang = Loc.Instance.Code;
         Data = Task.Run(() => GameData.Load(game, lang));
+        _models = null;
         Catalog = Data.ContinueWith(t => t.Result.LoadCatalog(game), TaskContinuationOptions.OnlyOnRanToCompletion);
         var data = Data;
         Inedible = Catalog.ContinueWith(_ => data.Result.LoadInedible(game), TaskContinuationOptions.OnlyOnRanToCompletion);

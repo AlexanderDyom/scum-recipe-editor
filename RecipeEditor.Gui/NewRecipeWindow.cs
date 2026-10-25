@@ -22,6 +22,9 @@ public sealed class NewRecipeWindow : Window
     private readonly Button _create;
     private string? _copyOf;
     private string? _icon;
+    // the dish whose model was chosen on the picker's "3D model" page, and what to take from it
+    private string? _model;
+    private bool _modelDish = true, _modelCook = true;
     private readonly IconView _iconView = new() { Width = 56, Height = 56, LetterSize = 26 };
     private readonly TextBlock _iconNote = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
 
@@ -75,7 +78,7 @@ public sealed class NewRecipeWindow : Window
         nameRow.ColumnDefinitions.Add(new ColumnDefinition());
         var iconButton = new Button
         {
-            Style = (Style)FindResource("Bare"), VerticalAlignment = VerticalAlignment.Top, ToolTip = Loc.T("ChooseIcon"),
+            Style = (Style)FindResource("Bare"), VerticalAlignment = VerticalAlignment.Top, ToolTip = Loc.T("ChooseIconModel"),
             Content = new Border
             {
                 Width = 64, Height = 64, CornerRadius = new CornerRadius(5), Background = Res("Slot"), BorderBrush = Res("SlotEdge"), BorderThickness = new Thickness(1),
@@ -166,18 +169,26 @@ public sealed class NewRecipeWindow : Window
         yield return ("known", Loc.T("GroupKnown"));
     }
 
-    /// <summary>The dish the new recipe's dish copies (its model; its icon unless one is chosen).</summary>
-    private string? TemplateDish()
-    {
-        var template = _scratch.IsChecked == true ? _doc.ScratchTemplate() : _copyOf;
-        return template == null ? null : _doc.Game.Recipe(template)?.Result;
-    }
+    /// <summary>
+    /// The recipe the new one is cloned from: the copied one, or for "from scratch" the one showing the chosen model in
+    /// the cookware (a copy takes that look with a ScumModKit edit instead, see Create).
+    /// </summary>
+    private string? RecipeTemplate() => _scratch.IsChecked == true ? _doc.ScratchTemplate(_modelCook ? _model : null) : _copyOf;
 
+    /// <summary>The dish the new recipe's dish copies (its model; its icon unless one is chosen).</summary>
+    private string? TemplateDish() =>
+        _model != null && _modelDish ? _model : RecipeTemplate() is { } template ? _doc.Game.Recipe(template)?.Result : null;
+
+    /// <summary>The icon and the 3D model of the dish: one window, two pages.</summary>
     private void PickIcon()
     {
-        var w = new IconPickerWindow(this, Loc.T("RecipeIconTitle"), [IconTab.Dishes(), IconTab.Food(), IconTab.All()], _icon ?? _doc.Game.ItemIcon(TemplateDish()));
+        var shown = _icon ?? _doc.Game.ItemIcon(TemplateDish());
+        var pick = new ModelPick(_model ?? TemplateDish(), _modelDish, _modelCook);
+        var w = new IconPickerWindow(this, Loc.T("RecipeIconTitle"), [IconTab.Dishes(), IconTab.Food(), IconTab.All()], shown, pick);
         if (w.ShowDialog() != true) return;
-        _icon = w.Result;
+        if (!string.Equals(w.Result, shown, StringComparison.OrdinalIgnoreCase)) _icon = w.Result;
+        if (w.ModelResult != null && (w.ModelDish || w.ModelCook))
+            (_model, _modelDish, _modelCook) = (w.ModelResult, w.ModelDish, w.ModelCook);
         Refresh();
     }
 
@@ -186,8 +197,10 @@ public sealed class NewRecipeWindow : Window
         var dish = TemplateDish();
         _iconView.Texture = _icon ?? _doc.Game.ItemIcon(dish);
         _iconView.Fallback = "?";
-        _iconNote.Text = _icon != null ? Loc.T("OwnIconChosen") + " · " + Loc.F("ModelAs", _doc.Game.ItemName(dish))
-            : dish != null ? Loc.F("IconModelAs", _doc.Game.ItemName(dish)) : "";
+        var cookDish = _model != null && _modelCook ? _model : RecipeTemplate() is { } rt ? _doc.Game.Recipe(rt)?.Result : null;
+        _iconNote.Text = (_icon != null ? Loc.T("OwnIconChosen") + " · " + Loc.F("ModelAs", _doc.Game.ItemName(dish))
+            : dish != null ? Loc.F("IconModelAs", _doc.Game.ItemName(dish)) : "")
+            + (cookDish != null ? " · " + Loc.F("CookAs", _doc.Game.ItemName(cookDish)) : "");
         _copyName.Text = _copyOf != null ? _doc.Game.Recipe(_copyOf)?.Name ?? _copyOf : Loc.T("NoRecipeChosen");
         _copyName.Foreground = Res(_copyOf != null ? "Text" : "Muted");
         var name = _name.Text.Trim();
@@ -202,9 +215,12 @@ public sealed class NewRecipeWindow : Window
     {
         try
         {
-            var template = _scratch.IsChecked == true ? _doc.ScratchTemplate() : _copyOf!;
+            var template = RecipeTemplate()!;
             var learn = (_learn.SelectedItem as ComboBoxItem)?.Tag as string ?? "known";
-            CreatedId = _doc.CreateRecipe(template, _name.Text.Trim(), _description.Text.Trim(), _scratch.IsChecked == true, learn, _icon);
+            CreatedId = _doc.CreateRecipe(template, _name.Text.Trim(), _description.Text.Trim(), _scratch.IsChecked == true, learn, _icon,
+                _model != null && _modelDish ? _model : null);
+            if (_model != null && _modelCook && _doc.CookLook(CreatedId) is { } look && !look.Equals(_model, StringComparison.OrdinalIgnoreCase))
+                _doc.SetCookLook(CreatedId, _model);
             DialogResult = true;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)

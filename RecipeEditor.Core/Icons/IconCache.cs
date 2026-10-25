@@ -14,7 +14,7 @@ public sealed class IconCache
 {
     public const int Size = 128;
     private readonly GameProvider _game;
-    private readonly object _lock = new();
+    private object _lock => _game.Sync;
 
     public string Folder { get; }
 
@@ -33,11 +33,14 @@ public sealed class IconCache
     }
 
     /// <summary>PNG file of a texture (/Game/.../ICO_X.ICO_X), made on first use; null when it cannot be read.</summary>
-    public string? Png(string? texture)
+    public string? Png(string? texture) => Png(texture, Size);
+
+    /// <summary>PNG of a texture at most <paramref name="size"/> px wide (model textures for the 3D view use 512).</summary>
+    public string? Png(string? texture, int size)
     {
         if (string.IsNullOrEmpty(texture) || texture == "None") return null;
         var package = texture.Split('.')[0];
-        var file = Path.Combine(Folder, string.Join("_", package.Trim('/').Split('/').Skip(1)) + ".png");
+        var file = Path.Combine(Folder, string.Join("_", package.Trim('/').Split('/').Skip(1)) + (size == Size ? "" : $"@{size}") + ".png");
         if (File.Exists(file)) return file;
         try
         {
@@ -46,13 +49,16 @@ public sealed class IconCache
             lock (_lock) // CUE4Parse readers are not meant for parallel loads of one package
                 tex = _game.Provider.TryLoadPackage(path, out var pkg) ? pkg.GetExports().OfType<UTexture2D>().FirstOrDefault() : null;
             if (tex?.PlatformData is not { Mips.Length: > 0 } pd) return null;
-            var mip = pd.Mips.FirstOrDefault(m => m.BulkData?.Data != null && m.SizeX <= 512) ?? pd.Mips[0];
+            var mip = pd.Mips.FirstOrDefault(m => m.BulkData?.Data != null && m.SizeX <= Math.Max(512, size)) ?? pd.Mips[0];
             var data = mip.BulkData?.Data;
             if (data == null) return null;
             var rgba = Decode(pd.PixelFormat.ToString(), data, mip.SizeX, mip.SizeY);
             if (rgba == null) return null;
+            // model textures keep roughness, not transparency, in alpha (Diffuse/Roughness): drawn opaque
+            if (size != Size)
+                for (var i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
             var (w, h) = (mip.SizeX, mip.SizeY);
-            while (w > Size && h > 1 && w % 2 == 0 && h % 2 == 0) (rgba, w, h) = Half(rgba, w, h);
+            while (w > size && h > 1 && w % 2 == 0 && h % 2 == 0) (rgba, w, h) = Half(rgba, w, h);
             Directory.CreateDirectory(Folder);
             var tmp = file + ".tmp";
             File.WriteAllBytes(tmp, Png(rgba, w, h));
