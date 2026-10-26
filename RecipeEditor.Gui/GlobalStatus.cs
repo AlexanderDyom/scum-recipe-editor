@@ -63,6 +63,15 @@ public sealed class GlobalStatus : Border
         }
         else Add(Loc.T("StMergerMissing"), "Warn", Loc.T("StMergerMissingTip"));
 
+        // a newer editor on GitHub: a link to the update (Settings → Updates)
+        if (Session.EditorUpdateAvailable)
+        {
+            var upd = new Button { Content = Loc.F("StEditorNew", Session.EditorLatest!.Tag.TrimStart('v')), Style = (Style)FindResource("Link"), VerticalAlignment = VerticalAlignment.Center, ToolTip = Loc.T("StEditorNewTip") };
+            upd.Click += (_, _) => { if (Window.GetWindow(this) is { } w) App.OpenSettings(w, "SecUpdates"); };
+            System.Windows.Automation.AutomationProperties.SetName(upd, "editorupdate");
+            _left.Children.Add(upd);
+        }
+
         _right.Children.Clear();
         var refresh = new Button
         {

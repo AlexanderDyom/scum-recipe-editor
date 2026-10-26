@@ -97,7 +97,7 @@ public static class MergerLink
     }
 
     /// <summary>The latest release on GitHub, or null (offline, no release).</summary>
-    public static async Task<GitHubRelease?> LatestAsync(string repo = Repo, CancellationToken cancel = default)
+    public static async Task<GitHubRelease?> LatestAsync(string repo = Repo, CancellationToken cancel = default, string exeName = ExeName)
     {
         try
         {
@@ -108,12 +108,13 @@ public static class MergerLink
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(cancel));
             var root = doc.RootElement;
             var tag = root.GetProperty("tag_name").GetString() ?? "";
-            if (!Version.TryParse(tag.TrimStart('v', 'V'), out var v)) return null;
+            if (EditorUpdate.ParseTag(tag) is not { } parsed) return null; // v1.2.0, v0.1.1b
+            var v = parsed.Version;
             string? exe = null, cli = null;
             foreach (var a in root.GetProperty("assets").EnumerateArray())
             {
                 var name = a.GetProperty("name").GetString() ?? "";
-                if (name.Equals(ExeName, StringComparison.OrdinalIgnoreCase)) exe = a.GetProperty("browser_download_url").GetString();
+                if (name.Equals(exeName, StringComparison.OrdinalIgnoreCase)) exe = a.GetProperty("browser_download_url").GetString();
                 if (name.Equals(CliName, StringComparison.OrdinalIgnoreCase)) cli = a.GetProperty("browser_download_url").GetString();
             }
             var published = root.TryGetProperty("published_at", out var p) && p.TryGetDateTime(out var d) ? d : DateTime.MinValue;

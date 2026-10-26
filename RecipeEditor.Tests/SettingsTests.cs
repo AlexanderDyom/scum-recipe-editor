@@ -26,3 +26,22 @@ public sealed class SettingsTests
         }
     }
 }
+
+public sealed class EditorUpdateTests
+{
+    /// <summary>Tags with a beta letter (v0.1.1b) are versions; newer = higher numbers, a later letter, or the final one.</summary>
+    [Fact]
+    public void ComparesBetaVersions()
+    {
+        Assert.Equal((new Version(0, 1, 1), "b"), EditorUpdate.ParseTag("v0.1.1b"));
+        Assert.Equal((new Version(1, 2, 0), ""), EditorUpdate.ParseTag("v1.2.0"));
+        Assert.Null(EditorUpdate.ParseTag("latest"));
+        Assert.True(EditorUpdate.IsNewer("v0.1.1b", "0.1.0b"));
+        Assert.True(EditorUpdate.IsNewer("v0.1.2b", "0.1.1b"));
+        Assert.True(EditorUpdate.IsNewer("v0.1.1c", "0.1.1b"));
+        Assert.True(EditorUpdate.IsNewer("v0.1.1", "0.1.1b"));
+        Assert.False(EditorUpdate.IsNewer("v0.1.1b", "0.1.1b"));
+        Assert.False(EditorUpdate.IsNewer("v0.1.0b", "0.1.1b"));
+        Assert.False(EditorUpdate.IsNewer("v0.1.1b", "0.1.1"));
+    }
+}

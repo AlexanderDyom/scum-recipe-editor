@@ -9,7 +9,7 @@
 A Windows tool for SCUM cooking mods: change the game's recipes, make your own recipes and cookbooks, and build them
 into a mod pak — without the Unreal editor.
 
-Version **0.1.1b** (beta). It works end to end (edit → build → cook in game), but expect rough edges; see
+Version **0.1.2b** (beta). It works end to end (edit → build → cook in game), but expect rough edges; see
 [Known limitations](#known-limitations).
 
 ## What it does
@@ -29,6 +29,8 @@ Version **0.1.1b** (beta). It works end to end (edit → build → cook in game)
   (see [Servers](#servers-who-needs-the-mod)). The shared asset registry is rebuilt with [ScumRegistryMerger](https://github.com/AlexanderDyom/scum-registry-merger),
   so the mod works together with other mods that add items.
 - Russian and English interface.
+- **Updates itself** from its GitHub releases: the status bar says when a new version is out, and Settings → Updates
+  downloads it and restarts (from 0.1.2b on; older versions have to be downloaded once by hand).
 
 ## What you need
 

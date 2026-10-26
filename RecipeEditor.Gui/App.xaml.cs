@@ -18,7 +18,7 @@ public partial class App : Application
 
     /// <summary>The editor's page on GitHub: releases, language files, issues.</summary>
     public const string ProjectPage = "https://github.com/AlexanderDyom/scum-recipe-editor";
-    /// <summary>The version users see (0.1.1b: beta), from InformationalVersion.</summary>
+    /// <summary>The version users see (0.1.2b: beta), from InformationalVersion.</summary>
     public static string Version =>
         typeof(App).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false) is [System.Reflection.AssemblyInformationalVersionAttribute a, ..]
             ? a.InformationalVersion : typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
@@ -61,6 +61,7 @@ public partial class App : Application
                 Dialog.Show(null, Loc.T("ErrorTitle"), ex.Message, Loc.T("Close"));
             }
         }
+        EditorUpdate.CleanUp();
         Session.RefreshMerger(Settings.CheckUpdates);
         Session.AskClientVisuals(null);
         ShutdownMode = ShutdownMode.OnLastWindowClose;

@@ -301,8 +301,50 @@ public static class Session
         Changed?.Invoke();
         if (!checkOnline) return;
         MergerLatest = await MergerLink.LatestAsync();
+        EditorLatest = await EditorUpdate.LatestAsync();
         MergerChecked = DateTime.Now;
         Changed?.Invoke();
+    }
+
+    /// <summary>The editor's latest release on GitHub (null: not checked, offline or none).</summary>
+    public static GitHubRelease? EditorLatest { get; private set; }
+
+    /// <summary>A newer editor is on GitHub (v0.1.2b over 0.1.1b, and the final 0.1.1 over 0.1.1b).</summary>
+    public static bool EditorUpdateAvailable => EditorLatest != null && EditorUpdate.IsNewer(EditorLatest.Tag, App.Version);
+
+    /// <summary>
+    /// Updates the editor: every window closes first (each asks about unsaved edits; one that stays open stops the
+    /// update), then the new exe is downloaded, put in place of this one and started.
+    /// </summary>
+    public static async Task UpdateEditorAsync()
+    {
+        if (EditorLatest is not { } release) return;
+        var app = Application.Current;
+        app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        foreach (var w in app.Windows.OfType<Window>().Reverse().ToList()) w.Close();
+        if (app.Windows.OfType<Window>().Any(w => w.IsVisible))
+        {
+            app.ShutdownMode = ShutdownMode.OnLastWindowClose; // the user kept a window (unsaved edits): no update
+            return;
+        }
+        var wait = new Window
+        {
+            Title = "SCUM Recipe Editor", Width = 360, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen, Style = (Style)app.Resources["AppWindow"],
+            Content = new System.Windows.Controls.TextBlock { Text = Loc.F("UpdatingEditor", release.Tag), Margin = new Thickness(20), TextWrapping = TextWrapping.Wrap },
+        };
+        wait.Show();
+        try
+        {
+            await EditorUpdate.InstallAsync(release);
+            app.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            wait.Close();
+            Dialog.Show(null, Loc.T("UpdateFailed"), ex.Message, Loc.T("Close"), icon: "");
+            app.Shutdown();
+        }
     }
 
     public static bool MergerUpdateAvailable => MergerLatest != null && MergerVersion != null && MergerLatest.Version > MergerVersion;

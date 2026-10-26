@@ -385,7 +385,24 @@ public partial class SettingsWindow : Window
     {
         var g = Group();
         Line(g, Loc.T("SetEditorVersion"), Loc.T("SetEditorReleases"), new TextBlock { Text = App.Version, FontFamily = (FontFamily)FindResource("CondFont"), FontWeight = FontWeights.SemiBold, FontSize = 18 });
+        // the latest release on GitHub: "you have the latest" or "update to X" (downloads, closes, starts the new one)
+        var latest = Session.EditorLatest;
+        UIElement action;
+        if (Session.EditorUpdateAvailable)
+        {
+            action = Btn("", Loc.F("UpdateEditorTo", latest!.Tag.TrimStart('v')), "Primary", async () =>
+            {
+                if (!Dialog.Show(this, Loc.F("UpdateEditorTo", latest.Tag.TrimStart('v')), Loc.T("UpdateEditorText"), Loc.T("UpdateEditorYes"), Loc.T("Cancel"), icon: "")) return;
+                await Session.UpdateEditorAsync();
+            });
+        }
+        else action = new TextBlock { Text = Loc.T(latest == null ? "EditorNotChecked" : "EditorUpToDate"), Foreground = Res("Muted"), FontSize = 12 };
+        Line(g, Loc.T("SetEditorLatest"), latest == null ? null : latest.Tag, action);
+        var page = Btn("", Loc.T("EditorReleasesPage"), "Btn", () => Open(App.ProjectPage + "/releases"));
+        Line(g, Loc.T("EditorReleases"), null, page);
         Line(g, Loc.T("SetCheckUpdates"), Loc.T("SetCheckUpdatesDesc"), Toggle(_s.CheckUpdates, v => _s.CheckUpdates = v, "checkupdates2"));
+        var check = Btn("", Loc.T("CheckNow"), "Btn", () => Session.RefreshMerger(checkOnline: true));
+        Line(g, Loc.T("CheckNowTitle"), null, check);
     }
 
     private void AboutSection()
