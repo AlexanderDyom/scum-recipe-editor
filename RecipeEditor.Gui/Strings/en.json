@@ -448,5 +448,16 @@
   "EditorReleases": "All versions",
   "EditorReleasesPage": "Releases page",
   "CheckNow": "Check",
-  "CheckNowTitle": "Check now (the editor and ScumRegistryMerger)"
+  "CheckNowTitle": "Check now (the editor and ScumRegistryMerger)",
+  "NewVersionTitle": "Version {0} is available",
+  "NewVersionCaption": "You have {0}. The new version came out on {1}.",
+  "UpdateNow": "Update now",
+  "UpdateLater": "Update later",
+  "UpdateKeeps": "Projects and settings stay as they are",
+  "WhatsNewTitle": "Updated to {0}",
+  "WhatsNewCaption": "What changed in this version.",
+  "WhatsNewCaptionFrom": "What changed in this version (was {0}).",
+  "WhatsNewOffline": "The description of this version didn't load: GitHub can't be reached. It's on the release page.",
+  "OpenRelease": "Open the release on GitHub",
+  "GotIt": "Got it"
 }

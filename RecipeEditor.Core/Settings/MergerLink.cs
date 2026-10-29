@@ -7,7 +7,8 @@ using System.Text.Json;
 
 namespace RecipeEditor.Core.Settings;
 
-public sealed record GitHubRelease(Version Version, string Tag, string PageUrl, string? ExeUrl, DateTime Published, string? CliUrl = null);
+/// <summary>A GitHub release: version, tag, page, download links, date and its description (Markdown, "" when none).</summary>
+public sealed record GitHubRelease(Version Version, string Tag, string PageUrl, string? ExeUrl, DateTime Published, string? CliUrl = null, string Notes = "");
 
 public static class MergerLink
 {
@@ -97,13 +98,20 @@ public static class MergerLink
     }
 
     /// <summary>The latest release on GitHub, or null (offline, no release).</summary>
-    public static async Task<GitHubRelease?> LatestAsync(string repo = Repo, CancellationToken cancel = default, string exeName = ExeName)
+    public static Task<GitHubRelease?> LatestAsync(string repo = Repo, CancellationToken cancel = default, string exeName = ExeName) =>
+        ReleaseAsync(repo, "latest", cancel, exeName);
+
+    /// <summary>The release with this tag (v0.1.3b) on GitHub, or null (offline, no such release).</summary>
+    public static Task<GitHubRelease?> TaggedAsync(string repo, string tag, CancellationToken cancel = default, string exeName = ExeName) =>
+        ReleaseAsync(repo, "tags/" + Uri.EscapeDataString(tag), cancel, exeName);
+
+    private static async Task<GitHubRelease?> ReleaseAsync(string repo, string which, CancellationToken cancel, string exeName)
     {
         try
         {
             using var c = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
             c.DefaultRequestHeaders.UserAgent.ParseAdd("ScumRecipeEditor");
-            using var resp = await c.GetAsync($"https://api.github.com/repos/{repo}/releases/latest", cancel);
+            using var resp = await c.GetAsync($"https://api.github.com/repos/{repo}/releases/{which}", cancel);
             if (!resp.IsSuccessStatusCode) return null;
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(cancel));
             var root = doc.RootElement;
@@ -118,8 +126,9 @@ public static class MergerLink
                 if (name.Equals(CliName, StringComparison.OrdinalIgnoreCase)) cli = a.GetProperty("browser_download_url").GetString();
             }
             var published = root.TryGetProperty("published_at", out var p) && p.TryGetDateTime(out var d) ? d : DateTime.MinValue;
+            var notes = root.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String ? body.GetString() ?? "" : "";
             return new GitHubRelease(new Version(v.Major, v.Minor, Math.Max(v.Build, 0)), tag,
-                root.GetProperty("html_url").GetString() ?? $"https://github.com/{repo}/releases", exe, published, cli);
+                root.GetProperty("html_url").GetString() ?? $"https://github.com/{repo}/releases", exe, published, cli, notes);
         }
         catch (Exception) when (!cancel.IsCancellationRequested)
         {

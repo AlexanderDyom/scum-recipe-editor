@@ -333,7 +333,7 @@ public sealed class GameData
         double? weight = null;
         int? uses = null;
         string? holds = null;
-        var esPackage = package.StartsWith("/Game/", StringComparison.OrdinalIgnoreCase) ? "SCUM/Content/" + package[6..] + "_ES" : null;
+        var esPackage = package.StartsWith("/Game/", StringComparison.OrdinalIgnoreCase) ? EsPackage(game, "SCUM/Content/" + package[6..]) : null;
         // an _ES that is a child of another (Mutant_Buck_Steak_ES of a steak) keeps only what differs: the rest is the parent's
         for (var depth = 0; esPackage != null && depth < 4; depth++)
         {
@@ -352,6 +352,16 @@ public sealed class GameData
             esPackage = parent != null && parent.StartsWith("SCUM/Content/", StringComparison.OrdinalIgnoreCase) ? parent[..parent.LastIndexOf('.')] : null;
         }
         return new ItemInfo(itemClass, caption ?? "", description ?? "", icon is null or "None" ? null : icon, CategoryOf(itemClass), Weight: weight, Uses: uses, Holds: holds);
+    }
+
+    /// <summary>The _ES package of an item package (SCUM/Content/.../X): X_ES, or ES_X next to it (the crow and seagull corpses).</summary>
+    private static string EsPackage(GameProvider game, string package)
+    {
+        var suffix = package + "_ES";
+        if (game.Provider.Files.ContainsKey(suffix + ".uasset")) return suffix;
+        var slash = package.LastIndexOf('/');
+        var prefix = package[..(slash + 1)] + "ES_" + package[(slash + 1)..];
+        return game.Provider.Files.ContainsKey(prefix + ".uasset") ? prefix : suffix;
     }
 
     /// <summary>

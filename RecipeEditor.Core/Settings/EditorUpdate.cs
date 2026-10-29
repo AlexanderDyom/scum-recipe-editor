@@ -37,6 +37,17 @@ public static class EditorUpdate
     /// <summary>The editor's latest release on GitHub (with its exe), or null (offline, none).</summary>
     public static Task<GitHubRelease?> LatestAsync(CancellationToken cancel = default) => MergerLink.LatestAsync(Repo, cancel, ExeName);
 
+    /// <summary>The editor's release of a version (0.1.3b -> tag v0.1.3b) on GitHub, or null (offline, not released).</summary>
+    public static Task<GitHubRelease?> ReleaseAsync(string version, CancellationToken cancel = default) =>
+        MergerLink.TaggedAsync(Repo, "v" + version.TrimStart('v', 'V'), cancel, ExeName);
+
+    /// <summary>
+    /// "What's new" once, at the first start of a newer version. <paramref name="lastSeen"/>: the version that last ran
+    /// (null before 0.1.3b, which first stored it); then an existing user (game set up) has just updated, a new one has not.
+    /// </summary>
+    public static bool ShowWhatsNew(string? lastSeen, string current, bool existingUser) =>
+        lastSeen == null ? existingUser : IsNewer(current, lastSeen);
+
     /// <summary>
     /// Downloads the release's exe next to the running one, renames the running exe to *.old.exe (Windows allows that),
     /// puts the new one in its place and starts it. The caller then closes the program.

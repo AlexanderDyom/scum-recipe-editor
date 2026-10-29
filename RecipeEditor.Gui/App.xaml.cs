@@ -36,6 +36,7 @@ public partial class App : Application
             else if (!e.Args[i].StartsWith("--")) _openProject = e.Args[i];
         }
         Settings = AppSettings.Load();
+        var existingUser = Settings.GameFolder != null; // set up before this start (not by the merger's settings below)
         if (Settings.UseMergerSettings)
         {
             // one setup for both programs: the game folder and key ScumRegistryMerger already has (same Windows user)
@@ -65,9 +66,37 @@ public partial class App : Application
         Session.RefreshMerger(Settings.CheckUpdates);
         Session.AskClientVisuals(null);
         ShutdownMode = ShutdownMode.OnLastWindowClose;
-        if (project != null) new MainWindow(project).Show();
-        else new ProjectsWindow().Show();
+        Window first = project != null ? new MainWindow(project) : new ProjectsWindow();
+        first.Show();
+        first.Dispatcher.BeginInvoke(() => _ = UpdateNoticesAsync(first, existingUser), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
+
+    /// <summary>
+    /// After the first window: "What's new" once at the first start of a newer version (its release on GitHub), then,
+    /// when updates are checked, "Version X is available" with "Update now" / "Update later".
+    /// </summary>
+    private static async Task UpdateNoticesAsync(Window owner, bool existingUser)
+    {
+        var previous = Settings.LastSeenVersion;
+        if (EditorUpdate.ShowWhatsNew(previous, Version, existingUser))
+        {
+            var release = await EditorUpdate.ReleaseAsync(Version);
+            ReleaseNotesWindow.ShowWhatsNew(Visible(owner), release, previous);
+        }
+        if (previous != Version)
+        {
+            Settings.LastSeenVersion = Version;
+            Settings.Save();
+        }
+        if (!Settings.CheckUpdates) return;
+        await Session.Refreshing;
+        if (Session.EditorUpdateAvailable && ReleaseNotesWindow.ShowUpdate(Visible(owner), Session.EditorLatest!))
+            await Session.UpdateEditorAsync();
+    }
+
+    /// <summary>The window to center a notice on: the first one, or whichever the user went on to.</summary>
+    private static Window? Visible(Window first) =>
+        first.IsVisible ? first : Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible && w.IsActive) ?? Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsVisible);
 
     /// <summary>Opens the game with the stored key (no window) when the settings are complete and the key still works.</summary>
     private bool TryStartSession()

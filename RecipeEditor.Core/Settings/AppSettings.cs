@@ -37,6 +37,9 @@ public sealed class AppSettings
     /// </summary>
     public bool? VisualsFromClient { get; set; }
 
+    /// <summary>The editor version that last ran (0.1.3b): "What's new" shows once when a newer one starts. Null before 0.1.3b.</summary>
+    public string? LastSeenVersion { get; set; }
+
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ScumRecipeEditor");
     public static string DefaultPath => Path.Combine(Folder, "settings.json");
 

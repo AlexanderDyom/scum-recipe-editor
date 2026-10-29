@@ -44,4 +44,27 @@ public sealed class EditorUpdateTests
         Assert.False(EditorUpdate.IsNewer("v0.1.0b", "0.1.1b"));
         Assert.False(EditorUpdate.IsNewer("v0.1.1b", "0.1.1"));
     }
+
+    /// <summary>"What's new" once after an update: not on a first install, not again, not after going back to an older exe.</summary>
+    [Fact]
+    public void WhatsNewOnlyAfterAnUpdate()
+    {
+        Assert.True(EditorUpdate.ShowWhatsNew(null, "0.1.3b", existingUser: true)); // from 0.1.2b, which stored no version
+        Assert.False(EditorUpdate.ShowWhatsNew(null, "0.1.3b", existingUser: false)); // first install
+        Assert.True(EditorUpdate.ShowWhatsNew("0.1.3b", "0.1.4b", existingUser: true));
+        Assert.False(EditorUpdate.ShowWhatsNew("0.1.3b", "0.1.3b", existingUser: true));
+        Assert.False(EditorUpdate.ShowWhatsNew("0.1.4b", "0.1.3b", existingUser: true));
+    }
+
+    /// <summary>A release on GitHub comes with its description (needs the internet; offline the test checks nothing).</summary>
+    [Fact]
+    public async Task ReleaseComesWithItsDescription()
+    {
+        var release = await EditorUpdate.ReleaseAsync("0.1.2b");
+        if (release == null) return;
+        Assert.Equal("v0.1.2b", release.Tag);
+        Assert.Contains("New in 0.1.2b", release.Notes);
+        Assert.NotNull(release.ExeUrl);
+        Assert.Null(await EditorUpdate.ReleaseAsync("0.0.1x"));
+    }
 }

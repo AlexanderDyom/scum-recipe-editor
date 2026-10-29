@@ -9,7 +9,7 @@
 A Windows tool for SCUM cooking mods: change the game's recipes, make your own recipes and cookbooks, and build them
 into a mod pak — without the Unreal editor.
 
-Version **0.1.2b** (beta). It works end to end (edit → build → cook in game), but expect rough edges; see
+Version **0.1.3b** (beta). It works end to end (edit → build → cook in game), but expect rough edges; see
 [Known limitations](#known-limitations).
 
 ## What it does
@@ -29,8 +29,9 @@ Version **0.1.2b** (beta). It works end to end (edit → build → cook in game)
   (see [Servers](#servers-who-needs-the-mod)). The shared asset registry is rebuilt with [ScumRegistryMerger](https://github.com/AlexanderDyom/scum-registry-merger),
   so the mod works together with other mods that add items.
 - Russian and English interface.
-- **Updates itself** from its GitHub releases: the status bar says when a new version is out, and Settings → Updates
-  downloads it and restarts (from 0.1.2b on; older versions have to be downloaded once by hand).
+- **Updates itself** from its GitHub releases: at start a window shows the new version and its release notes, with
+  "Update now" / "Update later" (from 0.1.3b on; the status bar and Settings → Updates have it too, from 0.1.2b on;
+  older versions have to be downloaded once by hand). After an update, the new version shows what changed, once.
 
 ## What you need
 
@@ -110,6 +111,14 @@ the waters (clean, dirty, ocean water) as liquids, and the two wall flags.
 - **On a server**, only cooking time and temperature work with the mod on the server alone; everything else needs the
   mod on the players' PCs too (see [Servers](#servers-who-needs-the-mod)).
 - The 3D view shows the pot and the pan; the oven, grill and skewer show the cooking look alone.
+- **After a SCUM update, build your mod again.** A mod carries the game's cooking files (recipe registry, cooking
+  skill, cookbooks) as they were when it was built; an old build hides what the update added (the Halloween update of
+  2026-10-28: the Cauldron and its Corpse Soup). The shared asset registry (`AssetRegistry.bin` of all mods in `~mods`)
+  must be rebuilt too, so that every mod works with the new game version: the editor's build does it with
+  [ScumRegistryMerger](https://github.com/AlexanderDyom/scum-registry-merger) when it installs the mod into `~mods`, and
+  passes it the AES key. After updating other mods, run ScumRegistryMerger yourself, **with the AES key** set in it:
+  with the key the shared registry is built on the game's own registry of the installed version; without it, on the
+  registry inside the lowest-priority mod, which is out of date until that mod is rebuilt for the new version.
 
 Building from source: see [BUILDING.md](BUILDING.md).
 

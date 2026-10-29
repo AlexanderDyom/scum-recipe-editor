@@ -292,8 +292,13 @@ public static class Session
     public static int Warnings { get; set; }
     public static int Errors { get; set; }
 
+    /// <summary>The last <see cref="RefreshMerger"/>: done when its GitHub check is.</summary>
+    public static Task Refreshing { get; private set; } = Task.CompletedTask;
+
     /// <summary>Finds the merger again and, when allowed (or asked), checks GitHub for a newer one.</summary>
-    public static async void RefreshMerger(bool checkOnline)
+    public static void RefreshMerger(bool checkOnline) => Refreshing = RefreshMergerAsync(checkOnline);
+
+    private static async Task RefreshMergerAsync(bool checkOnline)
     {
         MergerExe = MergerLink.Find(App.Settings.MergerPath);
         MergerVersion = MergerLink.VersionOf(MergerExe);

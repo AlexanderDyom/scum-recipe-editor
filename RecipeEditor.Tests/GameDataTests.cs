@@ -5,16 +5,18 @@ namespace RecipeEditor.Tests;
 [Collection("game")]
 public sealed class GameDataTests(GameFixture f)
 {
+    // Counts are at least those of the game as researched (October 2026: 113 recipes, 35 known); updates add recipes
+    // (the Halloween update: Cook_Dish_Soup_CrowStew, 114 and 36).
     [Fact]
     public void ReadsEveryRecipeOfTheGame()
     {
         if (!f.Available) return;
         var d = f.Ru!;
-        Assert.Equal(113, d.RegistryRecipeCount);
-        Assert.Equal(113, d.Recipes.Count);
-        Assert.Equal(111, d.Recipes.Count(r => !r.Technical));
+        Assert.True(d.RegistryRecipeCount >= 113, $"{d.RegistryRecipeCount} recipes in the registry");
+        Assert.Equal(d.RegistryRecipeCount, d.Recipes.Count);
+        Assert.Equal(d.Recipes.Count - 2, d.Recipes.Count(r => !r.Technical));
         Assert.All(d.Recipes.Where(r => !r.Technical), r => Assert.NotEmpty(r.Main));
-        Assert.Equal((113, 9), GameData.Count(f.Game!));
+        Assert.Equal((d.Recipes.Count, d.Books.Count), GameData.Count(f.Game!));
     }
 
     [Fact]
@@ -22,10 +24,10 @@ public sealed class GameDataTests(GameFixture f)
     {
         if (!f.Available) return;
         var d = f.Ru!;
-        Assert.Equal(9, d.Books.Count);
-        Assert.Equal(78, d.Books.Sum(b => b.Recipes.Count));
-        Assert.Equal(35, d.KnownByDefault.Count);
-        Assert.Equal(7, d.Recipes.Count(r => r.KnownByDefault && r.Books.Count > 0));
+        Assert.True(d.Books.Count >= 9, $"{d.Books.Count} books");
+        Assert.True(d.Books.Sum(b => b.Recipes.Count) >= 78);
+        Assert.True(d.KnownByDefault.Count >= 35, $"{d.KnownByDefault.Count} known");
+        Assert.True(d.Recipes.Count(r => r.KnownByDefault && r.Books.Count > 0) >= 7);
         Assert.Equal(
             ["Cook_Dish_EggRolls", "Cook_Dish_Grilled_Drumsticks", "Cook_Dish_Grilled_Potato", "Cook_Dish_Pizza_Calzone", "Cook_Dish_Pizza_Pepperoni"],
             d.Recipes.Where(r => r.Hidden).Select(r => r.Id).Order(StringComparer.Ordinal));
@@ -44,7 +46,25 @@ public sealed class GameDataTests(GameFixture f)
         Assert.Equal(["Мука", "Яйцо", "Молоко", "Вода", "Пищевая сода"], pancake.Main.Select(i => i.Title));
         Assert.Equal("Сковорода", d.UtilityName(pancake.Utilities[0]));
         Assert.Equal("Книга с рецептами пиццы", d.Book("Book_Cooking_Pizza")!.Name);
-        Assert.DoesNotContain(d.Recipes, r => !r.Technical && r.Name.All(c => c < 128));
+        // a name left in English is one the game does not translate yet (Corpse Soup of the Halloween update)
+        Assert.All(d.Recipes.Where(r => !r.Technical && r.Name.All(c => c < 128)), r => Assert.Equal(r.NameSource, r.Name));
+        Assert.True(d.Recipes.Count(r => !r.Technical && r.Name.All(c => c < 128)) <= 3);
+    }
+
+    /// <summary>The Halloween update (2026-10-28): the Cauldron and its Corpse Soup.</summary>
+    [Fact]
+    public void ReadsTheCauldronAndItsCorpseSoup()
+    {
+        if (!f.Available || f.Ru!.Recipe("Cook_Dish_Soup_CrowStew") is not { } soup) return;
+        Assert.Equal(["Cooking.Utility.Cauldron"], soup.Utilities);
+        Assert.Contains("Cooking.Utility.Cauldron", f.Ru.Recipe("Cook_Dish_Soup_Meat")!.Utilities);
+        // the game names it in English only, and so does the editor
+        Assert.Equal("Cauldron", f.Ru.UtilityName("Cooking.Utility.Cauldron"));
+        // its corpses have their _ES as ES_CrowCorpse, ES_SeagullCorpse
+        var d = f.Ru;
+        Assert.NotNull(d.ItemIcon("/Game/ConZ_Files/Items/Food/BodyParts/Animals/Crow/CrowCorpse.CrowCorpse_C"));
+        Assert.NotNull(d.ItemIcon("/Game/ConZ_Files/Items/Food/BodyParts/Animals/Seagull/SeagullCorpse.SeagullCorpse_C"));
+        Assert.NotEmpty(d.ItemName("/Game/ConZ_Files/Items/Food/BodyParts/Animals/Crow/CrowCorpse.CrowCorpse_C"));
     }
 
     [Fact]

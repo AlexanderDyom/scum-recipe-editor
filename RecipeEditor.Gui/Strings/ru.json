@@ -448,5 +448,16 @@
   "EditorReleases": "Все версии",
   "EditorReleasesPage": "Страница релизов",
   "CheckNow": "Проверить",
-  "CheckNowTitle": "Проверить сейчас (редактор и ScumRegistryMerger)"
+  "CheckNowTitle": "Проверить сейчас (редактор и ScumRegistryMerger)",
+  "NewVersionTitle": "Доступна версия {0}",
+  "NewVersionCaption": "У вас {0}. Новая версия вышла {1}.",
+  "UpdateNow": "Обновить сейчас",
+  "UpdateLater": "Обновить позже",
+  "UpdateKeeps": "Проекты и настройки сохранятся",
+  "WhatsNewTitle": "Обновлено до {0}",
+  "WhatsNewCaption": "Что изменилось в этой версии.",
+  "WhatsNewCaptionFrom": "Что изменилось в этой версии (было {0}).",
+  "WhatsNewOffline": "Описание версии не загрузилось: нет связи с GitHub. Оно есть на странице релиза.",
+  "OpenRelease": "Открыть релиз на GitHub",
+  "GotIt": "Понятно"
 }
